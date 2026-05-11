@@ -1,0 +1,52 @@
+services:
+  api:
+    container_name: cbio-ingest-api
+    image: localhost:5000/cbio-ingest:dev
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.cbio-ingest
+    depends_on:
+      - redis
+    volumes:
+      - ./study:/app/study:ro
+      - ./panel:/app/panel:ro
+      - ./db:/db
+      - cbio-ingest-app-data:/app-data
+    networks:
+      - cbio-ingest-net
+
+  worker:
+    container_name: cbio-ingest-worker
+    image: localhost:5000/cbio-ingest:dev
+    command: ["rq", "worker", "--with-scheduler"]
+    env_file:
+      - .env.cbio-ingest
+    depends_on:
+      - redis
+    volumes:
+      - ./study:/app/study:ro
+      - ./panel:/app/panel:ro
+      - ./db:/db
+      - /var/run/docker.sock:/var/run/docker.sock
+      - cbio-ingest-app-data:/app-data
+    networks:
+      - cbio-ingest-net
+
+  redis:
+    container_name: cbio-ingest-redis
+    image: redis:7-alpine
+    volumes:
+      - cbio-ingest-redis-data:/data
+      - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - cbio-ingest-net
+    command: redis-server --appendonly yes
+
+volumes:
+  cbio-ingest-redis-data:
+  cbio-ingest-app-data:
+
+networks:
+  cbio-ingest-net:
+    driver: bridge

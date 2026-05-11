@@ -1,0 +1,25 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+
+# Virtual environments
+.venv
+
+# Dot files
+.env
+
+# Coverage reporst
+htmlcov/
+coverage.xml
+.coverage
+
+study/
+panel/
+db/cbio-ingest.db

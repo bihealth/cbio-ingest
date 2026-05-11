@@ -1,0 +1,148 @@
+import os
+from datetime import UTC, datetime
+
+from sqlmodel import Session
+
+import docker
+from app.db import add_log, engine
+from app.models import LogLevel, Panel, Status, Study
+from app.validator import Validator
+
+
+def mark_in_progress(entity: Study | Panel, session: Session) -> None:
+    entity.status = Status.IN_PROGRESS
+    add_log(entity, LogLevel.INFO, "worker", "Ingestion started.")
+    session.add(entity)
+    session.commit()
+    session.refresh(entity)
+
+
+def mark_completed(entity: Study | Panel, session: Session) -> None:
+    entity.status = Status.COMPLETED
+    add_log(entity, LogLevel.INFO, "worker", "Ingestion completed.")
+    session.add(entity)
+    session.commit()
+    session.refresh(entity)
+
+
+def mark_failed(entity: Study | Panel, error_message: str, session: Session) -> None:
+    entity.status = Status.FAILED
+    add_log(entity, LogLevel.ERROR, "worker", f"Ingestion failed: {error_message}")
+    session.add(entity)
+    session.commit()
+    session.refresh(entity)
+
+
+def _run_ingest(
+    entity: Study | Panel, cmd: list[str], workdir: str | None, session: Session
+) -> None:
+    mark_in_progress(entity, session)
+
+    client: docker.DockerClient = docker.from_env(timeout=3600)  # 1 hour timeout
+
+    try:
+        container = client.containers.get(
+            os.getenv("CBIOPORTAL_CONTAINER_NAME", "cbioportal-container")
+        )
+
+        add_log(entity, LogLevel.INFO, "worker", f"Running command: {' '.join(cmd)}")
+        print(f"Starting ingestion with command: {' '.join(cmd)} ...")
+
+        exec_result = container.exec_run(
+            cmd=cmd,
+            workdir=workdir,
+            stdout=True,
+            stderr=True,
+            stream=False,
+        )
+
+        container.reload()
+        entity.command = " ".join(cmd)
+        entity.cbioportal_version = (
+            getattr(container, "attrs", {}).get("Config", {}).get("Image", "unknown")
+        )
+        session.add(entity)
+        session.commit()
+        session.refresh(entity)
+
+        logs = exec_result.output.decode("utf-8").split("\n")
+        exit_code = exec_result.exit_code
+
+        print(f"Finished ingestion with exit code {exit_code} (0 = success)")
+
+        log_level = LogLevel.INFO if exit_code == 0 else LogLevel.ERROR
+
+        for log in logs:
+            stripped_log = log.strip()
+            if stripped_log:
+                add_log(entity, log_level, "docker", stripped_log)
+
+        if exit_code == 0:
+            print("Restarting container to apply changes ...")
+            container.restart()
+            print("Finished restarting container")
+            add_log(
+                entity, LogLevel.INFO, "docker", "Container restarted to apply changes."
+            )
+            mark_completed(entity, session)
+            entity.date_ingested = datetime.now(UTC)
+            session.add(entity)
+            session.commit()
+            session.refresh(entity)
+        else:
+            mark_failed(
+                entity,
+                f"Container execution failed with exit code {exit_code}",
+                session,
+            )
+
+    except Exception as e:
+        mark_failed(entity, f"Ingestion failed: {e}", session)
+        raise
+
+
+def ingest_study(study_id: int) -> None:
+    with Session(engine) as session:
+        study = session.get(Study, study_id)
+
+        if not study:
+            raise ValueError(f"Study with ID {study_id} not found")
+
+        try:
+            validated_name = Validator().validate_folder_name(study.name)
+        except ValueError as e:
+            mark_failed(study, str(e), session)
+            raise
+
+        cmd = [
+            "metaImport.py",
+            "-u",
+            os.getenv("CBIOPORTAL_URL", "http://cbioportal:8080"),
+            "-s",
+            f"/study/{validated_name}",
+            "-o",
+        ]
+
+        _run_ingest(study, cmd, None, session)
+
+
+def ingest_panel(panel_id: int) -> None:
+    with Session(engine) as session:
+        panel = session.get(Panel, panel_id)
+
+        if not panel:
+            raise ValueError(f"Panel with ID {panel_id} not found")
+
+        try:
+            validated_name = Validator().validate_file_name(panel.name)
+        except ValueError as e:
+            mark_failed(panel, str(e), session)
+            raise
+
+        cmd = [
+            "./importGenePanel.pl",
+            "--data",
+            f"/panel/{validated_name}",
+        ]
+
+        _run_ingest(panel, cmd, "/core/scripts", session)
