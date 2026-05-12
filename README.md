@@ -95,7 +95,7 @@ A typical workflow looks like this:
 # 1. change a model in models.py, then:
 make db-migration msg="add new_field to study"
 
-# 2. review the generated file in db/migrations/versions/, fill in downgrade()
+# 2. review the generated file in migrations/versions/, fill in downgrade()
 
 # 3. apply it
 make db-migrate
