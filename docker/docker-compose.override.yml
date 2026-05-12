@@ -12,7 +12,6 @@ services:
       - ./study:/app/study:ro
       - ./panel:/app/panel:ro
       - ./db:/db
-      - cbio-ingest-app-data:/app-data
     networks:
       - cbio-ingest-net
 
@@ -29,7 +28,6 @@ services:
       - ./panel:/app/panel:ro
       - ./db:/db
       - /var/run/docker.sock:/var/run/docker.sock
-      - cbio-ingest-app-data:/app-data
     networks:
       - cbio-ingest-net
 
@@ -45,7 +43,6 @@ services:
 
 volumes:
   cbio-ingest-redis-data:
-  cbio-ingest-app-data:
 
 networks:
   cbio-ingest-net:
