@@ -1,9 +1,7 @@
 services:
   api:
     container_name: cbio-ingest-api
-    image: localhost:5000/cbio-ingest:dev
-    ports:
-      - "8000:8000"
+    image: ghcr.io/bihealth/cbio-ingest:latest
     env_file:
       - .env.cbio-ingest
     depends_on:
@@ -17,7 +15,7 @@ services:
 
   worker:
     container_name: cbio-ingest-worker
-    image: localhost:5000/cbio-ingest:dev
+    image: ghcr.io/bihealth/cbio-ingest:latest
     command: ["rq", "worker", "--with-scheduler"]
     env_file:
       - .env.cbio-ingest
@@ -36,7 +34,6 @@ services:
     image: redis:7-alpine
     volumes:
       - cbio-ingest-redis-data:/data
-      - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - cbio-ingest-net
     command: redis-server --appendonly yes
@@ -46,4 +43,3 @@ volumes:
 
 networks:
   cbio-ingest-net:
-    driver: bridge
