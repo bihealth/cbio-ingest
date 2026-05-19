@@ -194,6 +194,38 @@ class TestStudiesRouter:
             response = client.post("/studies/", json={"name": "study"})
             assert response.status_code == 401
 
+    class TestGetStudy:
+        """Tests for GET /studies/{study_id} endpoint."""
+
+        def test_get_study_success(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test fetching a single study by ID."""
+            study = Study(name="study-get", status=Status.COMPLETED)
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            response = client.get(f"/studies/{study.id}", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            assert data["id"] == study.id
+            assert data["name"] == "study-get"
+            assert data["status"] == "completed"
+
+        def test_get_study_not_found(
+            self, client: TestClient, auth_headers: dict[str, str]
+        ):
+            """Test fetching a non-existent study."""
+            response = client.get("/studies/9999", headers=auth_headers)
+            assert response.status_code == 404
+            assert response.json()["detail"] == "Study not found"
+
+        def test_get_study_unauthorized(self, client: TestClient):
+            """Test fetching a study without authentication."""
+            response = client.get("/studies/1")
+            assert response.status_code == 401
+
     class TestDeleteStudy:
         """Tests for DELETE /studies/{study_id} endpoint."""
 

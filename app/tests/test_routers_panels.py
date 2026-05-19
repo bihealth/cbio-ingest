@@ -194,6 +194,38 @@ class TestPanelsRouter:
             response = client.post("/panels/", json={"name": "panel.txt"})
             assert response.status_code == 401
 
+    class TestGetPanel:
+        """Tests for GET /panels/{panel_id} endpoint."""
+
+        def test_get_panel_success(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test fetching a single panel by ID."""
+            panel = Panel(name="panel-get.txt", status=Status.COMPLETED)
+            session.add(panel)
+            session.commit()
+            session.refresh(panel)
+
+            response = client.get(f"/panels/{panel.id}", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            assert data["id"] == panel.id
+            assert data["name"] == "panel-get.txt"
+            assert data["status"] == "completed"
+
+        def test_get_panel_not_found(
+            self, client: TestClient, auth_headers: dict[str, str]
+        ):
+            """Test fetching a non-existent panel."""
+            response = client.get("/panels/9999", headers=auth_headers)
+            assert response.status_code == 404
+            assert response.json()["detail"] == "Panel not found"
+
+        def test_get_panel_unauthorized(self, client: TestClient):
+            """Test fetching a panel without authentication."""
+            response = client.get("/panels/1")
+            assert response.status_code == 401
+
     class TestDeletePanel:
         """Tests for DELETE /panels/{panel_id} endpoint."""
 

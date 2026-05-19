@@ -62,6 +62,24 @@ async def create_panel(
     return panel
 
 
+@router.get("/{panel_id}", responses={404: {"description": "Not Found"}})
+async def get_panel(
+    panel_id: int,
+    session: Session = Depends(get_session),
+    token=Depends(verify_token),
+) -> Panel:
+    """Fetch a single panel by ID."""
+    try:
+        panel = session.get(Panel, panel_id)
+    except OverflowError:
+        raise HTTPException(status_code=404, detail="Panel not found")
+
+    if not panel:
+        raise HTTPException(status_code=404, detail="Panel not found")
+
+    return panel
+
+
 @router.delete("/{panel_id}", responses={404: {"description": "Not Found"}})
 async def delete_panel(
     panel_id: int,

@@ -62,6 +62,24 @@ async def create_study(
     return study
 
 
+@router.get("/{study_id}", responses={404: {"description": "Not Found"}})
+async def get_study(
+    study_id: int,
+    session: Session = Depends(get_session),
+    token=Depends(verify_token),
+) -> Study:
+    """Fetch a single study by ID."""
+    try:
+        study = session.get(Study, study_id)
+    except OverflowError:
+        raise HTTPException(status_code=404, detail="Study not found")
+
+    if not study:
+        raise HTTPException(status_code=404, detail="Study not found")
+
+    return study
+
+
 @router.delete("/{study_id}", responses={404: {"description": "Not Found"}})
 async def delete_study(
     study_id: int,
