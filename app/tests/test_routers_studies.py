@@ -53,6 +53,54 @@ class TestStudiesRouter:
             )
             assert response.status_code == 401
 
+    class TestListStudiesAll:
+        """Tests for GET /studies/?all endpoint."""
+
+        def test_all_studies_empty(
+            self, client: TestClient, auth_headers: dict[str, str]
+        ):
+            """Test ?all when both DB and filesystem are empty."""
+            response = client.get("/studies/?all", headers=auth_headers)
+            assert response.status_code == 200
+            assert response.json() == []
+
+        def test_all_studies_db_only(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test ?all returns DB studies even when not on disk."""
+            study = Study(name="db-only-study", status=Status.COMPLETED)
+            session.add(study)
+            session.commit()
+
+            response = client.get("/studies/?all", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data) == 1
+            assert data[0]["name"] == "db-only-study"
+            assert data[0]["status"] == "completed"
+
+        def test_all_studies_merges_db_and_fs(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test ?all merges DB records and filesystem-only studies without duplicates."""
+            study = Study(name="study1", status=Status.COMPLETED)
+            session.add(study)
+            session.commit()
+
+            response = client.get("/studies/?all", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            names = [s["name"] for s in data]
+            # DB study present
+            assert "study1" in names
+            # No duplicates
+            assert len(names) == len(set(names))
+
+        def test_all_studies_unauthorized(self, client: TestClient):
+            """Test ?all without authentication."""
+            response = client.get("/studies/?all")
+            assert response.status_code == 401
+
     class TestListStudiesAvailable:
         """Tests for GET /studies/?available endpoint."""
 

@@ -14,13 +14,19 @@ router = APIRouter(responses={401: {"description": "Unauthorized"}})
 @router.get("/")
 async def list_studies(
     available: str | None = Query(default=None),
+    all: str | None = Query(default=None),
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_studies),
     token=Depends(verify_token),
 ) -> list[Study]:
-    """List all ingested studies. Pass `?available` to list studies on disk instead."""
+    """List all ingested studies. Pass `?available` to list studies on disk instead. Pass `?all` to merge both."""
     if available is not None:
         return fs.list_studies()
+    if all is not None:
+        db_studies = list(session.exec(select(Study)).all())
+        db_names = {s.name for s in db_studies}
+        fs_only = [s for s in fs.list_studies() if s.name not in db_names]
+        return db_studies + fs_only
     return list(session.exec(select(Study)).all())
 
 

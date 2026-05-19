@@ -53,6 +53,54 @@ class TestPanelsRouter:
             )
             assert response.status_code == 401
 
+    class TestListPanelsAll:
+        """Tests for GET /panels/?all endpoint."""
+
+        def test_all_panels_empty(
+            self, client: TestClient, auth_headers: dict[str, str]
+        ):
+            """Test ?all when both DB and filesystem are empty."""
+            response = client.get("/panels/?all", headers=auth_headers)
+            assert response.status_code == 200
+            assert response.json() == []
+
+        def test_all_panels_db_only(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test ?all returns DB panels even when not on disk."""
+            panel = Panel(name="db-only.txt", status=Status.COMPLETED)
+            session.add(panel)
+            session.commit()
+
+            response = client.get("/panels/?all", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data) == 1
+            assert data[0]["name"] == "db-only.txt"
+            assert data[0]["status"] == "completed"
+
+        def test_all_panels_merges_db_and_fs(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test ?all merges DB records and filesystem-only panels without duplicates."""
+            panel = Panel(name="panel1.txt", status=Status.COMPLETED)
+            session.add(panel)
+            session.commit()
+
+            response = client.get("/panels/?all", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            names = [p["name"] for p in data]
+            # DB panel present
+            assert "panel1.txt" in names
+            # No duplicates
+            assert len(names) == len(set(names))
+
+        def test_all_panels_unauthorized(self, client: TestClient):
+            """Test ?all without authentication."""
+            response = client.get("/panels/?all")
+            assert response.status_code == 401
+
     class TestListPanelsAvailable:
         """Tests for GET /panels/?available endpoint."""
 
