@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
@@ -58,7 +60,8 @@ async def create_study(
         session.commit()
         session.refresh(study)
 
-    job = queue.enqueue(ingest_study, study.id)
+    job_timeout = int(os.getenv("JOB_TIMEOUT", "3600"))
+    job = queue.enqueue(ingest_study, study.id, job_timeout=job_timeout)
 
     study.job_id = job.id
     session.add(study)

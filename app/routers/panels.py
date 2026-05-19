@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
@@ -58,7 +60,8 @@ async def create_panel(
         session.commit()
         session.refresh(panel)
 
-    job = queue.enqueue(ingest_panel, panel.id)
+    job_timeout = int(os.getenv("JOB_TIMEOUT", "3600"))
+    job = queue.enqueue(ingest_panel, panel.id, job_timeout=job_timeout)
 
     panel.job_id = job.id
     session.add(panel)
