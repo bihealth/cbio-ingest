@@ -1,4 +1,8 @@
 services:
+  cbioportal:
+    volumes:
+      - ./panel:/panel:ro
+
   api:
     container_name: cbio-ingest-api
     image: ghcr.io/bihealth/cbio-ingest:latest
