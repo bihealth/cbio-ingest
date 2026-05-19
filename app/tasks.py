@@ -48,16 +48,46 @@ def _run_ingest(
         add_log(entity, LogLevel.INFO, "worker", f"Running command: {' '.join(cmd)}")
         print(f"Starting ingestion with command: {' '.join(cmd)} ...")
 
-        exec_result = container.exec_run(
-            cmd=cmd,
-            workdir=workdir,
+        entity.command = " ".join(cmd)
+        session.add(entity)
+        session.commit()
+        session.refresh(entity)
+
+        exec_id = client.api.exec_create(
+            container.id,
+            cmd,
             stdout=True,
             stderr=True,
-            stream=False,
+            workdir=workdir,
         )
+        output_stream = client.api.exec_start(exec_id["Id"], stream=True)
+
+        buffer = ""
+        # line_count = 0
+        # log_flush_interval = int(os.getenv("LOG_FLUSH_INTERVAL", "20"))
+
+        for chunk in output_stream:
+            buffer += chunk.decode("utf-8", errors="replace")
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                stripped = line.strip()
+                if stripped:
+                    add_log(entity, LogLevel.INFO, "docker", stripped)
+                    # line_count += 1
+                    # if line_count % log_flush_interval == 0:
+                        
+
+        if buffer.strip():
+            add_log(entity, LogLevel.INFO, "docker", buffer.strip())
+
+        session.add(entity)
+        session.commit()
+        session.refresh(entity)
+
+        inspect = client.api.exec_inspect(exec_id["Id"])
+        exit_code = inspect["ExitCode"]
 
         container.reload()
-        entity.command = " ".join(cmd)
         entity.cbioportal_version = (
             getattr(container, "attrs", {}).get("Config", {}).get("Image", "unknown")
         )
@@ -65,17 +95,7 @@ def _run_ingest(
         session.commit()
         session.refresh(entity)
 
-        logs = exec_result.output.decode("utf-8").split("\n")
-        exit_code = exec_result.exit_code
-
         print(f"Finished ingestion with exit code {exit_code} (0 = success)")
-
-        log_level = LogLevel.INFO if exit_code == 0 else LogLevel.ERROR
-
-        for log in logs:
-            stripped_log = log.strip()
-            if stripped_log:
-                add_log(entity, log_level, "docker", stripped_log)
 
         if exit_code == 0:
             print("Restarting container to apply changes ...")
