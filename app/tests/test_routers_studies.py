@@ -237,6 +237,66 @@ class TestStudiesRouter:
             assert data["job_id"] == "job-456"
             assert mock_queue.enqueue.called
 
+        @patch("app.routers.studies.queue")
+        def test_create_study_retry_failed_purges_logs_by_default(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that retrying a failed study purges logs by default."""
+            study = Study(
+                name="failed-study-logs",
+                status=Status.FAILED,
+                logs=[{"level": "ERROR", "message": "previous error"}],
+            )
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            mock_job = MagicMock()
+            mock_job.id = "job-789"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/",
+                json={"name": "failed-study-logs"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            assert response.json()["logs"] == []
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_retry_failed_keep_logs(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that retrying a failed study preserves logs when keep_logs=true."""
+            study = Study(
+                name="failed-study-keeplogs",
+                status=Status.FAILED,
+                logs=[{"level": "ERROR", "message": "previous error"}],
+            )
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            mock_job = MagicMock()
+            mock_job.id = "job-789"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/?keep_logs=true",
+                json={"name": "failed-study-keeplogs"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            assert len(response.json()["logs"]) == 1
+
         def test_create_study_unauthorized(self, client: TestClient):
             """Test creating a study without authentication."""
             response = client.post("/studies/", json={"name": "study"})

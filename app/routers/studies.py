@@ -1,5 +1,6 @@
 import os
 
+from sqlalchemy.orm import attributes
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
@@ -35,6 +36,7 @@ async def list_studies(
 @router.post("/", status_code=201, responses={400: {"description": "Bad Request"}})
 async def create_study(
     data: IngestQuery,
+    keep_logs: bool = Query(default=False),
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_studies),
     token=Depends(verify_token),
@@ -51,6 +53,9 @@ async def create_study(
             study.status = Status.INITIAL
             study.job_id = None
             study.date_ingested = None
+            if not keep_logs:
+                study.logs = []
+                attributes.flag_modified(study, "logs")
             session.add(study)
             session.commit()
             session.refresh(study)

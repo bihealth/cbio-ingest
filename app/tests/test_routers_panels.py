@@ -237,6 +237,66 @@ class TestPanelsRouter:
             assert data["job_id"] == "job-456"
             assert mock_queue.enqueue.called
 
+        @patch("app.routers.panels.queue")
+        def test_create_panel_retry_failed_purges_logs_by_default(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that retrying a failed panel purges logs by default."""
+            panel = Panel(
+                name="failed-panel-logs.txt",
+                status=Status.FAILED,
+                logs=[{"level": "ERROR", "message": "previous error"}],
+            )
+            session.add(panel)
+            session.commit()
+            session.refresh(panel)
+
+            mock_job = MagicMock()
+            mock_job.id = "job-789"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/panels/",
+                json={"name": "failed-panel-logs.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            assert response.json()["logs"] == []
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_retry_failed_keep_logs(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that retrying a failed panel preserves logs when keep_logs=true."""
+            panel = Panel(
+                name="failed-panel-keeplogs.txt",
+                status=Status.FAILED,
+                logs=[{"level": "ERROR", "message": "previous error"}],
+            )
+            session.add(panel)
+            session.commit()
+            session.refresh(panel)
+
+            mock_job = MagicMock()
+            mock_job.id = "job-789"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/panels/?keep_logs=true",
+                json={"name": "failed-panel-keeplogs.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            assert len(response.json()["logs"]) == 1
+
         def test_create_panel_unauthorized(self, client: TestClient):
             """Test creating a panel without authentication."""
             response = client.post("/panels/", json={"name": "panel.txt"})

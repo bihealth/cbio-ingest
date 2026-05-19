@@ -82,7 +82,7 @@ def _run_ingest(
             container.restart()
             print("Finished restarting container")
             add_log(
-                entity, LogLevel.INFO, "docker", "Container restarted to apply changes."
+                entity, LogLevel.INFO, "worker", "Container restarted to apply changes."
             )
             mark_completed(entity, session)
             entity.date_ingested = datetime.now(UTC)

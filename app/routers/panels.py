@@ -1,6 +1,7 @@
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import attributes
 from sqlmodel import Session, select
 
 from app.auth import verify_token
@@ -35,6 +36,7 @@ async def list_panels(
 @router.post("/", status_code=201, responses={400: {"description": "Bad Request"}})
 async def create_panel(
     data: IngestQuery,
+    keep_logs: bool = Query(default=False),
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_panels),
     token=Depends(verify_token),
@@ -51,6 +53,9 @@ async def create_panel(
             panel.status = Status.INITIAL
             panel.job_id = None
             panel.date_ingested = None
+            if not keep_logs:
+                panel.logs = []
+                attributes.flag_modified(panel, "logs")
             session.add(panel)
             session.commit()
             session.refresh(panel)
