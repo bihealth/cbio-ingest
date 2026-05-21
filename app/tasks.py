@@ -60,25 +60,10 @@ def _run_ingest(
             stderr=True,
             workdir=workdir,
         )
-        output_stream = client.api.exec_start(exec_id["Id"], stream=True)
+        stream = client.api.exec_start(exec_id["Id"], stream=True)
 
-        buffer = ""
-        # line_count = 0
-        # log_flush_interval = int(os.getenv("LOG_FLUSH_INTERVAL", "20"))
-
-        for chunk in output_stream:
-            buffer += chunk.decode("utf-8", errors="replace")
-            while "\n" in buffer:
-                line, buffer = buffer.split("\n", 1)
-                stripped = line.strip()
-                if stripped:
-                    add_log(entity, LogLevel.INFO, "docker", stripped)
-                    # line_count += 1
-                    # if line_count % log_flush_interval == 0:
-                        
-
-        if buffer.strip():
-            add_log(entity, LogLevel.INFO, "docker", buffer.strip())
+        for chunk in stream:
+            add_log(entity, LogLevel.INFO, "docker", chunk.decode())
 
         session.add(entity)
         session.commit()
@@ -137,7 +122,7 @@ def ingest_study(study_id: int) -> None:
         cmd = [
             "metaImport.py",
             "-u",
-            os.getenv("CBIOPORTAL_URL", "http://cbioportal:8080"),
+            "http://cbioportal:8080",
             "-s",
             f"/study/{validated_name}",
             "-o",
