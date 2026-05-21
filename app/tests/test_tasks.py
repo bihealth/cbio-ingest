@@ -136,7 +136,9 @@ class TestIngestStudy:
 
         # Mock streaming low-level API
         mock_client.api.exec_create.return_value = {"Id": "exec-id-123"}
-        mock_client.api.exec_start.return_value = iter([b"Successfully imported study\n"])
+        mock_client.api.exec_start.return_value = iter(
+            [b"Successfully imported study\n"]
+        )
         mock_client.api.exec_inspect.return_value = {"ExitCode": 0}
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
@@ -210,7 +212,9 @@ class TestIngestStudy:
 
         # Mock failed execution
         mock_client.api.exec_create.return_value = {"Id": "exec-id-fail"}
-        mock_client.api.exec_start.return_value = iter([b"Error: Failed to import study\n"])
+        mock_client.api.exec_start.return_value = iter(
+            [b"Error: Failed to import study\n"]
+        )
         mock_client.api.exec_inspect.return_value = {"ExitCode": 1}
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
@@ -266,7 +270,9 @@ class TestIngestPanel:
         mock_client.containers.get.return_value = mock_container
 
         mock_client.api.exec_create.return_value = {"Id": "exec-id-panel"}
-        mock_client.api.exec_start.return_value = iter([b"Successfully imported panel\n"])
+        mock_client.api.exec_start.return_value = iter(
+            [b"Successfully imported panel\n"]
+        )
         mock_client.api.exec_inspect.return_value = {"ExitCode": 0}
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
@@ -314,7 +320,9 @@ class TestIngestPanel:
         mock_client.containers.get.return_value = mock_container
 
         mock_client.api.exec_create.return_value = {"Id": "exec-id-fail-panel"}
-        mock_client.api.exec_start.return_value = iter([b"Error: Failed to import panel\n"])
+        mock_client.api.exec_start.return_value = iter(
+            [b"Error: Failed to import panel\n"]
+        )
         mock_client.api.exec_inspect.return_value = {"ExitCode": 1}
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}

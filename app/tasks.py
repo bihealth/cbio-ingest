@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 
 from sqlmodel import Session
 
+import codecs
+
 import docker
 from app.db import add_log, engine
 from app.models import LogLevel, Panel, Status, Study
@@ -61,9 +63,20 @@ def _run_ingest(
             workdir=workdir,
         )
         stream = client.api.exec_start(exec_id["Id"], stream=True)
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        buffer = ""
 
         for chunk in stream:
-            add_log(entity, LogLevel.INFO, "docker", chunk.decode())
+            text = decoder.decode(chunk)
+            buffer += text
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.rstrip("\r")
+
+                if not line.strip():
+                    continue
+
+                add_log(entity, LogLevel.INFO, "docker", line)
 
         session.add(entity)
         session.commit()
