@@ -6,6 +6,8 @@ services:
   api:
     container_name: cbio-ingest-api
     image: ghcr.io/bihealth/cbio-ingest:latest
+    ports:
+      - "8000:8000"
     env_file:
       - .env.cbio-ingest
     depends_on:
