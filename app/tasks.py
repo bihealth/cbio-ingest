@@ -77,6 +77,8 @@ def _run_ingest(
                     continue
 
                 add_log(entity, LogLevel.INFO, "docker", line)
+                session.add(entity)
+                session.commit()
 
         session.add(entity)
         session.commit()
