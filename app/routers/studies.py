@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from app.auth import verify_token
 from app.db import get_session
 from app.fs import FileSystemService, get_fs_service_studies
-from app.models import IngestQuery, Status, Study
+from app.models import IngestQuery, Panel, Status, Study
 from app.scheduler import queue
 from app.tasks import ingest_study
 
@@ -33,7 +33,7 @@ async def list_studies(
     return list(session.exec(select(Study)).all())
 
 
-@router.post("/", status_code=201, responses={400: {"description": "Bad Request"}})
+@router.post("/", status_code=201, responses={400: {"description": "Bad Request"}, 409: {"description": "Conflict"}})
 async def create_study(
     data: IngestQuery,
     keep_logs: bool = Query(default=False),
@@ -64,6 +64,10 @@ async def create_study(
         session.add(study)
         session.commit()
         session.refresh(study)
+
+    if session.exec(select(Study).where(Study.status == Status.IN_PROGRESS)).first() or \
+            session.exec(select(Panel).where(Panel.status == Status.IN_PROGRESS)).first():
+        raise HTTPException(status_code=409, detail="Another ingestion is already in progress")
 
     job_timeout = int(os.getenv("JOB_TIMEOUT", "3600"))
     job = queue.enqueue(ingest_study, study.id, job_timeout=job_timeout)
