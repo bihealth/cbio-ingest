@@ -1,9 +1,8 @@
+import codecs
 import os
 from datetime import UTC, datetime
 
 from sqlmodel import Session
-
-import codecs
 
 import docker
 from app.db import add_log, engine
@@ -61,6 +60,7 @@ def _run_ingest(
             stdout=True,
             stderr=True,
             workdir=workdir,
+            environment={"PYTHONUNBUFFERED": "1"},
         )
         stream = client.api.exec_start(exec_id["Id"], stream=True)
         decoder = codecs.getincrementaldecoder("utf-8")()
