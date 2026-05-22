@@ -9,6 +9,7 @@ dependencies = [
     "click>=8.3.2",
     "docker>=7.1.0",
     "fastapi[standard]>=0.136.0",
+    "pyrefly>=1.0.0",
     "python-dotenv>=1.2.2",
     "redis>=7.4.0",
     "rq>=2.8.0",
@@ -36,6 +37,12 @@ select = [
   "I",  # isort
 ]
 
+[tool.pyrefly]
+project-includes = [
+    "**/*.py*",
+    "**/*.ipynb",
+]
+
 [dependency-groups]
 dev = [
     "ruff>=0.15.11",
@@ -45,5 +52,4 @@ dev = [
     "pytest-cov>=7.1.0",
     "schemathesis>=4.17.0",
     "openapi-spec-validator>=0.7.1",
-    "pyright>=1.1.409",
 ]
