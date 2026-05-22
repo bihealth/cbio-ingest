@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -24,6 +24,7 @@ class StudyPanelBase(SQLModel):
     name: str
     status: Status = Field(default=Status.INITIAL)
     date_ingested: Optional[datetime] = Field(default=None)
+    date_created: datetime = Field(default_factory=lambda: datetime.now(UTC))
     logs: List[Dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     job_id: Optional[str] = None
     command: Optional[str] = None
