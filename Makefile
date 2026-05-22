@@ -16,7 +16,7 @@ check:
 
 .PHONY: type
 type:
-	uv run pyright
+	uv run pyrefly check
 
 .PHONY: fix
 fix:
