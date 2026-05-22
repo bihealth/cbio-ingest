@@ -20,6 +20,7 @@ def mark_in_progress(entity: Study | Panel, session: Session) -> None:
 
 def mark_completed(entity: Study | Panel, session: Session) -> None:
     entity.status = Status.COMPLETED
+    entity.date_ingested = datetime.now(UTC)
     add_log(entity, LogLevel.INFO, "worker", "Ingestion completed.")
     session.add(entity)
     session.commit()
@@ -28,6 +29,7 @@ def mark_completed(entity: Study | Panel, session: Session) -> None:
 
 def mark_failed(entity: Study | Panel, error_message: str, session: Session) -> None:
     entity.status = Status.FAILED
+    entity.date_ingested = datetime.now(UTC)
     add_log(entity, LogLevel.ERROR, "worker", f"Ingestion failed: {error_message}")
     session.add(entity)
     session.commit()
@@ -103,10 +105,6 @@ def _run_ingest(
             print("Finished restarting container")
             add_log(entity, LogLevel.INFO, "worker", "Container restarted to apply changes.")
             mark_completed(entity, session)
-            entity.date_ingested = datetime.now(UTC)
-            session.add(entity)
-            session.commit()
-            session.refresh(entity)
         else:
             mark_failed(
                 entity,
