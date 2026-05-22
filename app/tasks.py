@@ -1,3 +1,4 @@
+import codecs
 import os
 from datetime import UTC, datetime
 
@@ -48,16 +49,45 @@ def _run_ingest(
         add_log(entity, LogLevel.INFO, "worker", f"Running command: {' '.join(cmd)}")
         print(f"Starting ingestion with command: {' '.join(cmd)} ...")
 
-        exec_result = container.exec_run(
-            cmd=cmd,
-            workdir=workdir,
+        entity.command = " ".join(cmd)
+        session.add(entity)
+        session.commit()
+        session.refresh(entity)
+
+        exec_id = client.api.exec_create(
+            container.id,
+            cmd,
             stdout=True,
             stderr=True,
-            stream=False,
+            workdir=workdir,
+            environment={"PYTHONUNBUFFERED": "1"},
         )
+        stream = client.api.exec_start(exec_id["Id"], stream=True)
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        buffer = ""
+
+        for chunk in stream:
+            text = decoder.decode(chunk)
+            buffer += text
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.rstrip("\r")
+
+                if not line.strip():
+                    continue
+
+                add_log(entity, LogLevel.INFO, "docker", line)
+                session.add(entity)
+                session.commit()
+
+        session.add(entity)
+        session.commit()
+        session.refresh(entity)
+
+        inspect = client.api.exec_inspect(exec_id["Id"])
+        exit_code = inspect["ExitCode"]
 
         container.reload()
-        entity.command = " ".join(cmd)
         entity.cbioportal_version = (
             getattr(container, "attrs", {}).get("Config", {}).get("Image", "unknown")
         )
@@ -65,25 +95,13 @@ def _run_ingest(
         session.commit()
         session.refresh(entity)
 
-        logs = exec_result.output.decode("utf-8").split("\n")
-        exit_code = exec_result.exit_code
-
         print(f"Finished ingestion with exit code {exit_code} (0 = success)")
-
-        log_level = LogLevel.INFO if exit_code == 0 else LogLevel.ERROR
-
-        for log in logs:
-            stripped_log = log.strip()
-            if stripped_log:
-                add_log(entity, log_level, "docker", stripped_log)
 
         if exit_code == 0:
             print("Restarting container to apply changes ...")
             container.restart()
             print("Finished restarting container")
-            add_log(
-                entity, LogLevel.INFO, "worker", "Container restarted to apply changes."
-            )
+            add_log(entity, LogLevel.INFO, "worker", "Container restarted to apply changes.")
             mark_completed(entity, session)
             entity.date_ingested = datetime.now(UTC)
             session.add(entity)
@@ -117,7 +135,7 @@ def ingest_study(study_id: int) -> None:
         cmd = [
             "metaImport.py",
             "-u",
-            os.getenv("CBIOPORTAL_URL", "http://cbioportal:8080"),
+            "http://cbioportal:8080",
             "-s",
             f"/study/{validated_name}",
             "-o",

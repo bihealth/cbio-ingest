@@ -168,4 +168,5 @@ class TestIngestQuery:
     def test_ingest_query_validation(self):
         """Test that IngestQuery requires a name."""
         with pytest.raises(ValidationError):
+            # pyrefly: ignore [missing-argument]
             IngestQuery()  # pyright: ignore[reportCallIssue]

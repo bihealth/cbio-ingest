@@ -36,16 +36,12 @@ class TestStudiesSmoke:
         assert response.status_code == 401
 
     @patch("app.routers.studies.queue")
-    def test_create_study(
-        self, mock_queue: MagicMock, client: TestClient, auth_headers: dict
-    ):
+    def test_create_study(self, mock_queue: MagicMock, client: TestClient, auth_headers: dict):
         mock_job = MagicMock()
         mock_job.id = "smoke-job-id"
         mock_queue.enqueue.return_value = mock_job
 
-        response = client.post(
-            "/studies/", json={"name": "smoke-study"}, headers=auth_headers
-        )
+        response = client.post("/studies/", json={"name": "smoke-study"}, headers=auth_headers)
         assert response.status_code == 201
         assert response.json()["name"] == "smoke-study"
 
@@ -70,16 +66,12 @@ class TestPanelsSmoke:
         assert response.status_code == 401
 
     @patch("app.routers.panels.queue")
-    def test_create_panel(
-        self, mock_queue: MagicMock, client: TestClient, auth_headers: dict
-    ):
+    def test_create_panel(self, mock_queue: MagicMock, client: TestClient, auth_headers: dict):
         mock_job = MagicMock()
         mock_job.id = "smoke-job-id"
         mock_queue.enqueue.return_value = mock_job
 
-        response = client.post(
-            "/panels/", json={"name": "smoke-panel.txt"}, headers=auth_headers
-        )
+        response = client.post("/panels/", json={"name": "smoke-panel.txt"}, headers=auth_headers)
         assert response.status_code == 201
         assert response.json()["name"] == "smoke-panel.txt"
 

@@ -134,11 +134,10 @@ class TestIngestStudy:
         mock_container = MagicMock()
         mock_client.containers.get.return_value = mock_container
 
-        # Mock successful execution
-        mock_exec_result = MagicMock()
-        mock_exec_result.exit_code = 0
-        mock_exec_result.output = b"Successfully imported study\n"
-        mock_container.exec_run.return_value = mock_exec_result
+        # Mock streaming low-level API
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-123"}
+        mock_client.api.exec_start.return_value = iter([b"Successfully imported study\n"])
+        mock_client.api.exec_inspect.return_value = {"ExitCode": 0}
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
 
@@ -149,7 +148,8 @@ class TestIngestStudy:
         # Verify Docker operations
         mock_docker.from_env.assert_called_once_with(timeout=3600)
         mock_client.containers.get.assert_called_once_with("test-container")
-        mock_container.exec_run.assert_called_once()
+        mock_client.api.exec_create.assert_called_once()
+        mock_client.api.exec_start.assert_called_once()
         mock_container.restart.assert_called_once()
 
         # Verify study status
@@ -170,9 +170,7 @@ class TestIngestStudy:
 
     @patch("app.tasks.docker")
     @patch("app.tasks.Session")
-    def test_ingest_study_container_not_found(
-        self, mock_session_class: Mock, mock_docker: Mock
-    ):
+    def test_ingest_study_container_not_found(self, mock_session_class: Mock, mock_docker: Mock):
         """Test study ingestion when Docker container is not found."""
         session = MagicMock()
         mock_session_class.return_value.__enter__.return_value = session
@@ -192,9 +190,7 @@ class TestIngestStudy:
 
     @patch("app.tasks.docker")
     @patch("app.tasks.Session")
-    def test_ingest_study_execution_failure(
-        self, mock_session_class: Mock, mock_docker: Mock
-    ):
+    def test_ingest_study_execution_failure(self, mock_session_class: Mock, mock_docker: Mock):
         """Test study ingestion with non-zero exit code."""
         session = MagicMock()
         mock_session_class.return_value.__enter__.return_value = session
@@ -209,10 +205,9 @@ class TestIngestStudy:
         mock_client.containers.get.return_value = mock_container
 
         # Mock failed execution
-        mock_exec_result = MagicMock()
-        mock_exec_result.exit_code = 1
-        mock_exec_result.output = b"Error: Failed to import study\n"
-        mock_container.exec_run.return_value = mock_exec_result
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-fail"}
+        mock_client.api.exec_start.return_value = iter([b"Error: Failed to import study\n"])
+        mock_client.api.exec_inspect.return_value = {"ExitCode": 1}
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
 
@@ -224,9 +219,7 @@ class TestIngestStudy:
 
     @patch("app.tasks.docker")
     @patch("app.tasks.Session")
-    def test_ingest_study_invalid_name(
-        self, mock_session_class: Mock, mock_docker: Mock
-    ):
+    def test_ingest_study_invalid_name(self, mock_session_class: Mock, mock_docker: Mock):
         """Test study ingestion with invalid folder name."""
         session = MagicMock()
         mock_session_class.return_value.__enter__.return_value = session
@@ -266,10 +259,9 @@ class TestIngestPanel:
         mock_container = MagicMock()
         mock_client.containers.get.return_value = mock_container
 
-        mock_exec_result = MagicMock()
-        mock_exec_result.exit_code = 0
-        mock_exec_result.output = b"Successfully imported panel\n"
-        mock_container.exec_run.return_value = mock_exec_result
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-panel"}
+        mock_client.api.exec_start.return_value = iter([b"Successfully imported panel\n"])
+        mock_client.api.exec_inspect.return_value = {"ExitCode": 0}
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
 
@@ -278,7 +270,8 @@ class TestIngestPanel:
 
         mock_docker.from_env.assert_called_once_with(timeout=3600)
         mock_client.containers.get.assert_called_once_with("test-container")
-        mock_container.exec_run.assert_called_once()
+        mock_client.api.exec_create.assert_called_once()
+        mock_client.api.exec_start.assert_called_once()
         mock_container.restart.assert_called_once()
 
         assert panel.status == Status.COMPLETED
@@ -298,9 +291,7 @@ class TestIngestPanel:
 
     @patch("app.tasks.docker")
     @patch("app.tasks.Session")
-    def test_ingest_panel_execution_failure(
-        self, mock_session_class: Mock, mock_docker: Mock
-    ):
+    def test_ingest_panel_execution_failure(self, mock_session_class: Mock, mock_docker: Mock):
         """Test panel ingestion with non-zero exit code."""
         session = MagicMock()
         mock_session_class.return_value.__enter__.return_value = session
@@ -314,10 +305,9 @@ class TestIngestPanel:
         mock_container = MagicMock()
         mock_client.containers.get.return_value = mock_container
 
-        mock_exec_result = MagicMock()
-        mock_exec_result.exit_code = 1
-        mock_exec_result.output = b"Error: Failed to import panel\n"
-        mock_container.exec_run.return_value = mock_exec_result
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-fail-panel"}
+        mock_client.api.exec_start.return_value = iter([b"Error: Failed to import panel\n"])
+        mock_client.api.exec_inspect.return_value = {"ExitCode": 1}
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
 
@@ -328,9 +318,7 @@ class TestIngestPanel:
 
     @patch("app.tasks.docker")
     @patch("app.tasks.Session")
-    def test_ingest_panel_docker_exception(
-        self, mock_session_class: Mock, mock_docker: Mock
-    ):
+    def test_ingest_panel_docker_exception(self, mock_session_class: Mock, mock_docker: Mock):
         """Test panel ingestion with Docker exception."""
         session = MagicMock()
         mock_session_class.return_value.__enter__.return_value = session

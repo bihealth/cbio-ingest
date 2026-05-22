@@ -27,9 +27,7 @@ class TestFileSystemService:
         return panel_dir
 
     @pytest.fixture
-    def fs_service_studies(
-        self, session: Session, study_dir: Path
-    ) -> FileSystemService:
+    def fs_service_studies(self, session: Session, study_dir: Path) -> FileSystemService:
         """Create a filesystem service for studies."""
         return FileSystemService(session=session, base_path=str(study_dir))
 
@@ -41,9 +39,7 @@ class TestFileSystemService:
     class TestGetIngestedStudy:
         """Tests for get_ingested_study method."""
 
-        def test_get_existing_study(
-            self, fs_service_studies: FileSystemService, session: Session
-        ):
+        def test_get_existing_study(self, fs_service_studies: FileSystemService, session: Session):
             """Test getting an existing study from database."""
             study = Study(name="test-study", status=Status.COMPLETED)
             session.add(study)
@@ -62,9 +58,7 @@ class TestFileSystemService:
     class TestGetIngestedPanel:
         """Tests for get_ingested_panel method."""
 
-        def test_get_existing_panel(
-            self, fs_service_panels: FileSystemService, session: Session
-        ):
+        def test_get_existing_panel(self, fs_service_panels: FileSystemService, session: Session):
             """Test getting an existing panel from database."""
             panel = Panel(name="test-panel.txt", status=Status.IN_PROGRESS)
             session.add(panel)
@@ -83,9 +77,7 @@ class TestFileSystemService:
     class TestListStudies:
         """Tests for list_studies method."""
 
-        def test_list_studies_empty_directory(
-            self, fs_service_studies: FileSystemService
-        ):
+        def test_list_studies_empty_directory(self, fs_service_studies: FileSystemService):
             """Test listing studies in an empty directory."""
             studies = fs_service_studies.list_studies()
             assert studies == []
@@ -149,23 +141,17 @@ class TestFileSystemService:
             assert len(studies) == 1
             assert studies[0].name == "study1"
 
-        def test_list_studies_nonexistent_directory(
-            self, session: Session, tmp_path: Path
-        ):
+        def test_list_studies_nonexistent_directory(self, session: Session, tmp_path: Path):
             """Test listing studies when directory doesn't exist."""
             nonexistent_dir = tmp_path / "nonexistent"
-            fs_service = FileSystemService(
-                session=session, base_path=str(nonexistent_dir)
-            )
+            fs_service = FileSystemService(session=session, base_path=str(nonexistent_dir))
             studies = fs_service.list_studies()
             assert studies == []
 
     class TestListPanels:
         """Tests for list_panels method."""
 
-        def test_list_panels_empty_directory(
-            self, fs_service_panels: FileSystemService
-        ):
+        def test_list_panels_empty_directory(self, fs_service_panels: FileSystemService):
             """Test listing panels in an empty directory."""
             panels = fs_service_panels.list_panels()
             assert panels == []
@@ -229,13 +215,9 @@ class TestFileSystemService:
             assert len(panels) == 1
             assert panels[0].name == "panel1.txt"
 
-        def test_list_panels_nonexistent_directory(
-            self, session: Session, tmp_path: Path
-        ):
+        def test_list_panels_nonexistent_directory(self, session: Session, tmp_path: Path):
             """Test listing panels when directory doesn't exist."""
             nonexistent_dir = tmp_path / "nonexistent"
-            fs_service = FileSystemService(
-                session=session, base_path=str(nonexistent_dir)
-            )
+            fs_service = FileSystemService(session=session, base_path=str(nonexistent_dir))
             panels = fs_service.list_panels()
             assert panels == []
