@@ -45,6 +45,7 @@ async def list_panels(
 async def create_panel(
     data: IngestQuery,
     keep_logs: bool = Query(default=False),
+    force: bool = Query(default=False),
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_panels),
     token=Depends(verify_token),
@@ -54,10 +55,11 @@ async def create_panel(
 
     if panel:
         if panel.status == Status.COMPLETED:
-            raise HTTPException(status_code=400, detail="Panel ingested successfully")
+            if not force:
+                raise HTTPException(status_code=400, detail="Panel ingested successfully")
         if panel.status == Status.IN_PROGRESS:
             raise HTTPException(status_code=400, detail="Panel ingestion in progress")
-        if panel.status == Status.FAILED:
+        if panel.status in (Status.FAILED, Status.COMPLETED):
             panel.status = Status.INITIAL
             panel.job_id = None
             panel.date_ingested = None

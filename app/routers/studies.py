@@ -45,6 +45,7 @@ async def list_studies(
 async def create_study(
     data: IngestQuery,
     keep_logs: bool = Query(default=False),
+    force: bool = Query(default=False),
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_studies),
     token=Depends(verify_token),
@@ -54,10 +55,11 @@ async def create_study(
 
     if study:
         if study.status == Status.COMPLETED:
-            raise HTTPException(status_code=400, detail="Study ingested successfully")
+            if not force:
+                raise HTTPException(status_code=400, detail="Study ingested successfully")
         if study.status == Status.IN_PROGRESS:
             raise HTTPException(status_code=400, detail="Study ingestion in progress")
-        if study.status == Status.FAILED:
+        if study.status in (Status.FAILED, Status.COMPLETED):
             study.status = Status.INITIAL
             study.job_id = None
             study.date_ingested = None
