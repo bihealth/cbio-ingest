@@ -1,6 +1,6 @@
 """Tests for models module."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -52,7 +52,7 @@ class TestStudy:
 
     def test_create_study_with_custom_values(self, session: Session):
         """Test creating a study with custom values."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         logs = [{"level": "INFO", "message": "Test log"}]
         study = Study(
             name="custom-study",
@@ -114,7 +114,7 @@ class TestPanel:
 
     def test_create_panel_with_custom_values(self, session: Session):
         """Test creating a panel with custom values."""
-        now = datetime.now()
+        now = datetime.now(UTC)
         logs = [{"level": "INFO", "message": "Test log"}]
         panel = Panel(
             name="custom-panel",
