@@ -15,9 +15,7 @@ class TestStudiesRouter:
     class TestListStudies:
         """Tests for GET /studies/ endpoint."""
 
-        def test_list_studies_empty(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
+        def test_list_studies_empty(self, client: TestClient, auth_headers: dict[str, str]):
             """Test listing studies when database is empty."""
             response = client.get("/studies/", headers=auth_headers)
             assert response.status_code == 200
@@ -48,17 +46,13 @@ class TestStudiesRouter:
 
         def test_list_studies_invalid_token(self, client: TestClient):
             """Test listing studies with invalid token."""
-            response = client.get(
-                "/studies/", headers={"Authorization": "Bearer invalid"}
-            )
+            response = client.get("/studies/", headers={"Authorization": "Bearer invalid"})
             assert response.status_code == 401
 
     class TestListStudiesAll:
         """Tests for GET /studies/?all endpoint."""
 
-        def test_all_studies_empty(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
+        def test_all_studies_empty(self, client: TestClient, auth_headers: dict[str, str]):
             """Test ?all when both DB and filesystem are empty."""
             response = client.get("/studies/?all", headers=auth_headers)
             assert response.status_code == 200
@@ -321,9 +315,7 @@ class TestStudiesRouter:
             assert data["name"] == "study-get"
             assert data["status"] == "completed"
 
-        def test_get_study_not_found(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
+        def test_get_study_not_found(self, client: TestClient, auth_headers: dict[str, str]):
             """Test fetching a non-existent study."""
             response = client.get("/studies/9999", headers=auth_headers)
             assert response.status_code == 404
@@ -355,9 +347,7 @@ class TestStudiesRouter:
             deleted_study = session.get(Study, study.id)
             assert deleted_study is None
 
-        def test_delete_study_not_found(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
+        def test_delete_study_not_found(self, client: TestClient, auth_headers: dict[str, str]):
             """Test deleting a non-existent study."""
             response = client.delete("/studies/9999", headers=auth_headers)
             assert response.status_code == 404

@@ -1,7 +1,7 @@
 import os
 
-from sqlalchemy.orm import attributes
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import attributes
 from sqlmodel import Session, select
 
 from app.auth import verify_token
@@ -22,7 +22,11 @@ async def list_studies(
     fs: FileSystemService = Depends(get_fs_service_studies),
     token=Depends(verify_token),
 ) -> list[Study]:
-    """List all ingested studies. Pass `?available` to list studies on disk instead. Pass `?all` to merge both."""
+    """List all ingested studies.
+
+    Pass `?available` to list studies on disk instead.
+    Pass `?all` to merge both.
+    """
     if available is not None:
         return fs.list_studies()
     if all is not None:
@@ -33,7 +37,11 @@ async def list_studies(
     return list(session.exec(select(Study)).all())
 
 
-@router.post("/", status_code=201, responses={400: {"description": "Bad Request"}, 409: {"description": "Conflict"}})
+@router.post(
+    "/",
+    status_code=201,
+    responses={400: {"description": "Bad Request"}, 409: {"description": "Conflict"}},
+)
 async def create_study(
     data: IngestQuery,
     keep_logs: bool = Query(default=False),
@@ -65,8 +73,10 @@ async def create_study(
         session.commit()
         session.refresh(study)
 
-    if session.exec(select(Study).where(Study.status == Status.IN_PROGRESS)).first() or \
-            session.exec(select(Panel).where(Panel.status == Status.IN_PROGRESS)).first():
+    if (
+        session.exec(select(Study).where(Study.status == Status.IN_PROGRESS)).first()
+        or session.exec(select(Panel).where(Panel.status == Status.IN_PROGRESS)).first()
+    ):
         raise HTTPException(status_code=409, detail="Another ingestion is already in progress")
 
     job_timeout = int(os.getenv("JOB_TIMEOUT", "3600"))

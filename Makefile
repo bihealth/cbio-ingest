@@ -12,6 +12,11 @@ format:
 .PHONY: check
 check:
 	uv run ruff check .
+	uv run ruff format --check .
+
+.PHONY: type
+type:
+	uv run pyright
 
 .PHONY: fix
 fix:
@@ -40,10 +45,6 @@ worker:
 .PHONY: docker
 docker:
 	bash docker/build.sh
-
-.PHONY: docker-ghcr
-docker-ghcr:
-	bash docker/build-ghcr.sh
 
 .PHONY: db-migrate
 db-migrate:

@@ -4,13 +4,14 @@ from unittest.mock import MagicMock, patch
 
 import schemathesis
 from fastapi.testclient import TestClient
+from hypothesis import HealthCheck, settings
 from openapi_spec_validator import validate
 from schemathesis.checks import CHECKS, load_all_checks
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
-from hypothesis import settings, HealthCheck
 
-from app import APP_VERSION, main as main_module
+from app import APP_VERSION
+from app import main as main_module
 from app.db import get_session
 from app.main import app
 from app.models import Status
@@ -47,9 +48,7 @@ class TestOpenAPISpec:
         assert "info" in spec
         assert spec["info"]["title"] == "cBioPortal Ingest API"
         assert spec["info"]["version"] == APP_VERSION
-        assert (
-            spec["info"]["description"] == "REST API for ingesting data into cBioPortal"
-        )
+        assert spec["info"]["description"] == "REST API for ingesting data into cBioPortal"
 
     def test_openapi_has_all_endpoints(self, client: TestClient):
         """Test that all expected endpoints are documented."""
@@ -87,9 +86,7 @@ class TestOpenAPISpec:
 
         for path, method in protected_paths:
             endpoint = paths.get(path, {}).get(method, {})
-            assert "security" in endpoint, (
-                f"{method.upper()} {path} should have security"
-            )
+            assert "security" in endpoint, f"{method.upper()} {path} should have security"
 
     def test_openapi_has_schemas(self, client: TestClient):
         """Test that OpenAPI spec includes all model schemas."""
@@ -101,9 +98,7 @@ class TestOpenAPISpec:
         expected_schemas = ["Study", "Panel", "IngestQuery"]
 
         for schema_name in expected_schemas:
-            assert schema_name in schemas, (
-                f"Schema {schema_name} not found in OpenAPI spec"
-            )
+            assert schema_name in schemas, f"Schema {schema_name} not found in OpenAPI spec"
 
     def test_openapi_study_schema_structure(self, client: TestClient):
         """Test that Study schema has correct structure."""

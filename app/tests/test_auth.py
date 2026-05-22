@@ -12,17 +12,13 @@ class TestVerifyToken:
 
     def test_valid_token(self, mock_token: str):
         """Test that valid token is accepted."""
-        credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer", credentials=mock_token
-        )
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials=mock_token)
         result = verify_token(credentials)
         assert result == mock_token
 
     def test_invalid_token(self, mock_token: str):
         """Test that invalid token raises HTTPException."""
-        credentials = HTTPAuthorizationCredentials(
-            scheme="Bearer", credentials="wrong-token"
-        )
+        credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="wrong-token")
         with pytest.raises(HTTPException) as exc_info:
             verify_token(credentials)
 

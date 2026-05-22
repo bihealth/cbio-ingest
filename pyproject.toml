@@ -25,6 +25,17 @@ packages = ["app"]
 [tool.fastapi]
 entrypoint = "app.main:app"
 
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+  "E",  # pycodestyle errors
+  "F",  # pyflakes
+  "I",  # isort
+]
+
 [dependency-groups]
 dev = [
     "ruff>=0.15.11",
@@ -34,4 +45,5 @@ dev = [
     "pytest-cov>=7.1.0",
     "schemathesis>=4.17.0",
     "openapi-spec-validator>=0.7.1",
+    "pyright>=1.1.409",
 ]

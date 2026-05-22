@@ -57,7 +57,8 @@ class Validator:
         # Only allow alphanumeric characters, hyphens, underscores, dots, and a single extension
         if not re.match(r"^[a-zA-Z0-9._-]+\.[a-zA-Z0-9]+$", name):
             raise ValueError(
-                f"Invalid file name: {name}. Only alphanumeric, hyphens, underscores, and a single extension allowed"
+                f"Invalid file name: {name}. "
+                "Only alphanumeric, hyphens, underscores, and a single extension allowed"
             )
 
         return ValidFileName(name)

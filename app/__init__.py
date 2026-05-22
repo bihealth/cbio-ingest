@@ -1,7 +1,8 @@
 # cbio-ingest FastAPI application
-from dotenv import load_dotenv
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import metadata as _metadata
+
+from dotenv import load_dotenv
 
 load_dotenv()
 

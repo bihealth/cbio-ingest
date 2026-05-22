@@ -66,13 +66,9 @@ def get_fs_service_studies(
     session: Session = Depends(get_session),
 ) -> FileSystemService:
     """Dependency to get filesystem service instance."""
-    return FileSystemService(
-        session=session, base_path=os.getenv("STUDY_DIR", "/app/study")
-    )
+    return FileSystemService(session=session, base_path=os.getenv("STUDY_DIR", "/app/study"))
 
 
 def get_fs_service_panels(session: Session = Depends(get_session)) -> FileSystemService:
     """Dependency to get filesystem service instance."""
-    return FileSystemService(
-        session=session, base_path=os.getenv("PANEL_DIR", "/app/panel")
-    )
+    return FileSystemService(session=session, base_path=os.getenv("PANEL_DIR", "/app/panel"))

@@ -101,9 +101,7 @@ def _run_ingest(
             print("Restarting container to apply changes ...")
             container.restart()
             print("Finished restarting container")
-            add_log(
-                entity, LogLevel.INFO, "worker", "Container restarted to apply changes."
-            )
+            add_log(entity, LogLevel.INFO, "worker", "Container restarted to apply changes.")
             mark_completed(entity, session)
             entity.date_ingested = datetime.now(UTC)
             session.add(entity)

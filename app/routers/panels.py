@@ -22,7 +22,11 @@ async def list_panels(
     fs: FileSystemService = Depends(get_fs_service_panels),
     token=Depends(verify_token),
 ) -> list[Panel]:
-    """List all ingested panels. Pass `?available` to list panels on disk instead. Pass `?all` to merge both."""
+    """List all ingested panels.
+
+    Pass `?available` to list panels on disk instead.
+    Pass `?all` to merge both.
+    """
     if available is not None:
         return fs.list_panels()
     if all is not None:
@@ -33,7 +37,11 @@ async def list_panels(
     return list(session.exec(select(Panel)).all())
 
 
-@router.post("/", status_code=201, responses={400: {"description": "Bad Request"}, 409: {"description": "Conflict"}})
+@router.post(
+    "/",
+    status_code=201,
+    responses={400: {"description": "Bad Request"}, 409: {"description": "Conflict"}},
+)
 async def create_panel(
     data: IngestQuery,
     keep_logs: bool = Query(default=False),
@@ -65,8 +73,10 @@ async def create_panel(
         session.commit()
         session.refresh(panel)
 
-    if session.exec(select(Study).where(Study.status == Status.IN_PROGRESS)).first() or \
-            session.exec(select(Panel).where(Panel.status == Status.IN_PROGRESS)).first():
+    if (
+        session.exec(select(Study).where(Study.status == Status.IN_PROGRESS)).first()
+        or session.exec(select(Panel).where(Panel.status == Status.IN_PROGRESS)).first()
+    ):
         raise HTTPException(status_code=409, detail="Another ingestion is already in progress")
 
     job_timeout = int(os.getenv("JOB_TIMEOUT", "3600"))

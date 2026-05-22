@@ -15,9 +15,7 @@ class TestPanelsRouter:
     class TestListPanels:
         """Tests for GET /panels/ endpoint."""
 
-        def test_list_panels_empty(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
+        def test_list_panels_empty(self, client: TestClient, auth_headers: dict[str, str]):
             """Test listing panels when database is empty."""
             response = client.get("/panels/", headers=auth_headers)
             assert response.status_code == 200
@@ -48,17 +46,13 @@ class TestPanelsRouter:
 
         def test_list_panels_invalid_token(self, client: TestClient):
             """Test listing panels with invalid token."""
-            response = client.get(
-                "/panels/", headers={"Authorization": "Bearer invalid"}
-            )
+            response = client.get("/panels/", headers={"Authorization": "Bearer invalid"})
             assert response.status_code == 401
 
     class TestListPanelsAll:
         """Tests for GET /panels/?all endpoint."""
 
-        def test_all_panels_empty(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
+        def test_all_panels_empty(self, client: TestClient, auth_headers: dict[str, str]):
             """Test ?all when both DB and filesystem are empty."""
             response = client.get("/panels/?all", headers=auth_headers)
             assert response.status_code == 200
@@ -321,9 +315,7 @@ class TestPanelsRouter:
             assert data["name"] == "panel-get.txt"
             assert data["status"] == "completed"
 
-        def test_get_panel_not_found(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
+        def test_get_panel_not_found(self, client: TestClient, auth_headers: dict[str, str]):
             """Test fetching a non-existent panel."""
             response = client.get("/panels/9999", headers=auth_headers)
             assert response.status_code == 404
@@ -355,9 +347,7 @@ class TestPanelsRouter:
             deleted_panel = session.get(Panel, panel.id)
             assert deleted_panel is None
 
-        def test_delete_panel_not_found(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
+        def test_delete_panel_not_found(self, client: TestClient, auth_headers: dict[str, str]):
             """Test deleting a non-existent panel."""
             response = client.delete("/panels/9999", headers=auth_headers)
             assert response.status_code == 404
