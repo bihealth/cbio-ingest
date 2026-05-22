@@ -291,6 +291,94 @@ class TestStudiesRouter:
             assert response.status_code == 201
             assert len(response.json()["logs"]) == 1
 
+        @patch("app.routers.studies.queue")
+        def test_create_study_force_completed(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test force re-ingesting a completed study."""
+            study = Study(name="completed-study-force", status=Status.COMPLETED)
+            session.add(study)
+            session.commit()
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/?force=true",
+                json={"name": "completed-study-force"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert data["name"] == "completed-study-force"
+            assert data["job_id"] == "job-force"
+            assert mock_queue.enqueue.called
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_force_completed_purges_logs_by_default(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that force re-ingesting a completed study purges logs by default."""
+            study = Study(
+                name="completed-study-force-logs",
+                status=Status.COMPLETED,
+                logs=[{"level": "INFO", "message": "previous success"}],
+            )
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force-logs"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/?force=true",
+                json={"name": "completed-study-force-logs"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            assert response.json()["logs"] == []
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_force_completed_keep_logs(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that force re-ingesting a completed study preserves logs when keep_logs=true."""
+            study = Study(
+                name="completed-study-force-keeplogs",
+                status=Status.COMPLETED,
+                logs=[{"level": "INFO", "message": "previous success"}],
+            )
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force-keeplogs"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/?force=true&keep_logs=true",
+                json={"name": "completed-study-force-keeplogs"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            assert len(response.json()["logs"]) == 1
+
         def test_create_study_unauthorized(self, client: TestClient):
             """Test creating a study without authentication."""
             response = client.post("/studies/", json={"name": "study"})

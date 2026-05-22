@@ -291,6 +291,94 @@ class TestPanelsRouter:
             assert response.status_code == 201
             assert len(response.json()["logs"]) == 1
 
+        @patch("app.routers.panels.queue")
+        def test_create_panel_force_completed(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test force re-ingesting a completed panel."""
+            panel = Panel(name="completed-panel-force.txt", status=Status.COMPLETED)
+            session.add(panel)
+            session.commit()
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/panels/?force=true",
+                json={"name": "completed-panel-force.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert data["name"] == "completed-panel-force.txt"
+            assert data["job_id"] == "job-force"
+            assert mock_queue.enqueue.called
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_force_completed_purges_logs_by_default(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that force re-ingesting a completed panel purges logs by default."""
+            panel = Panel(
+                name="completed-panel-force-logs.txt",
+                status=Status.COMPLETED,
+                logs=[{"level": "INFO", "message": "previous success"}],
+            )
+            session.add(panel)
+            session.commit()
+            session.refresh(panel)
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force-logs"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/panels/?force=true",
+                json={"name": "completed-panel-force-logs.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            assert response.json()["logs"] == []
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_force_completed_keep_logs(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that force re-ingesting a completed panel preserves logs when keep_logs=true."""
+            panel = Panel(
+                name="completed-panel-force-keeplogs.txt",
+                status=Status.COMPLETED,
+                logs=[{"level": "INFO", "message": "previous success"}],
+            )
+            session.add(panel)
+            session.commit()
+            session.refresh(panel)
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force-keeplogs"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/panels/?force=true&keep_logs=true",
+                json={"name": "completed-panel-force-keeplogs.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            assert len(response.json()["logs"]) == 1
+
         def test_create_panel_unauthorized(self, client: TestClient):
             """Test creating a panel without authentication."""
             response = client.post("/panels/", json={"name": "panel.txt"})

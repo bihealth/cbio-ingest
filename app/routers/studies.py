@@ -1,5 +1,4 @@
 import os
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import attributes
@@ -64,7 +63,6 @@ async def create_study(
             study.status = Status.INITIAL
             study.job_id = None
             study.date_ingested = None
-            study.date_created = datetime.now(UTC)
             if not keep_logs:
                 study.logs = []
                 attributes.flag_modified(study, "logs")

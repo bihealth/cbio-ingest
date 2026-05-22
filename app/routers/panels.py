@@ -1,5 +1,4 @@
 import os
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import attributes
@@ -64,7 +63,6 @@ async def create_panel(
             panel.status = Status.INITIAL
             panel.job_id = None
             panel.date_ingested = None
-            panel.date_created = datetime.now(UTC)
             if not keep_logs:
                 panel.logs = []
                 attributes.flag_modified(panel, "logs")
