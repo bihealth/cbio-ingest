@@ -147,7 +147,7 @@ class TestIngestStudy:
             ingest_study(1)
 
         # Verify Docker operations
-        mock_docker.from_env.assert_called_once_with(timeout=3600)
+        mock_docker.from_env.assert_called_once_with(timeout=43200)
         mock_client.containers.get.assert_called_once_with("test-container")
         mock_client.api.exec_create.assert_called_once()
         mock_client.api.exec_start.assert_called_once()
@@ -257,7 +257,7 @@ class TestIngestStudy:
         mock_client.containers.get.return_value = mock_container
         mock_client.api.exec_create.return_value = {"Id": "exec-id-timeout"}
         mock_client.api.exec_start.side_effect = JobTimeoutException(
-            "Task exceeded maximum timeout value (3600 seconds)"
+            "Task exceeded maximum timeout value (43200 seconds)"
         )
 
         with pytest.raises(JobTimeoutException):
@@ -296,7 +296,7 @@ class TestIngestPanel:
         with patch.dict("os.environ", {"CBIOPORTAL_CONTAINER_NAME": "test-container"}):
             ingest_panel(1)
 
-        mock_docker.from_env.assert_called_once_with(timeout=3600)
+        mock_docker.from_env.assert_called_once_with(timeout=43200)
         mock_client.containers.get.assert_called_once_with("test-container")
         mock_client.api.exec_create.assert_called_once()
         mock_client.api.exec_start.assert_called_once()
@@ -380,7 +380,7 @@ class TestIngestPanel:
         mock_client.containers.get.return_value = mock_container
         mock_client.api.exec_create.return_value = {"Id": "exec-id-timeout"}
         mock_client.api.exec_start.side_effect = JobTimeoutException(
-            "Task exceeded maximum timeout value (3600 seconds)"
+            "Task exceeded maximum timeout value (43200 seconds)"
         )
 
         with pytest.raises(JobTimeoutException):
