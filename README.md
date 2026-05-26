@@ -40,52 +40,54 @@ make serve
 make worker
 ```
 
-## Docker
-
-### Container registry (once)
-
-```bash
-docker run -d -p 5000:5000 --name registry registry:2
-```
-
-If the container is not running anymore (because of system restart or similar):
-
-```bash
-docker start registry
-```
-
-### Build
-
-```bash
-bash docker/build.sh
-```
-
-This builds and pushes the image to your local registry.
-
-### Pull
-
-```bash
-docker pull localhost:5000/cbio-ingest:dev
-```
-
-### Docker Compose
-
-To use the installation with the cBioPortal docker compose, copy the override and env file to the
-cbioPortal Docker compose:
-
-```bash
-cp docker/docker-compose.override.yml ../cbioportal-docker-compose
-cp docker/env.example ../cbioportal-docker-compose/.env.cbio-ingest
-```
+### Local cBioPortal & cbio-ingest Docker
 
 There is a script available that sets up cBioPortal from the official sources and copies the
-cbio-ingest Docker files to that repository:
+necessary cbio-ingest Docker files (available in `docker/`) to that repository and starts the
+containers:
 
 ```bash
 bash utils/install-cbioportal.sh <installation_folder>
 ```
 
 This will create the <installation_folder> from where the script is called.
+
+## Local Docker build for development
+
+In case you want to use a local development Docker image instead of the official one, you can use
+your own local registry, build the image and push it to there. Then, reference the local image
+instead of the official one in the `docker-compose.override.yml`.
+
+To be able to push the Docker image, run a local Docker registry first (once):
+
+```bash
+docker run -d -p 5000:5000 --name registry registry:2
+```
+
+If the container is not running anymore (because of system restart or similar) do:
+
+```bash
+docker start registry
+```
+
+To build and push the image to the local registry, use the provided script:
+
+```bash
+bash docker/build.sh
+```
+
+Finally, replace the Docker image source in the `docker-compose.override.yml`:
+
+```yml
+services:
+  api:                                        
+    container_name: cbio-ingest-api
+    image: localhost:5000/cbio-ingest:dev  # was: ghcr.io/bihealth/cbio-ingest:latest
+
+  worker:
+    container_name: cbio-ingest-worker
+    image: localhost:5000/cbio-ingest:dev  # was: ghcr.io/bihealth/cbio-ingest:latest
+```
 
 ## Data provisioning
 
