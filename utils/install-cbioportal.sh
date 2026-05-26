@@ -3,13 +3,18 @@
 set -e
 
 INSTALL_DIR="${1}"
+FORCE=false
+
+if [[ "${2}" == "--force" ]]; then
+  FORCE=true
+fi
 
 if [[ -z "${INSTALL_DIR}" ]]; then
-  echo "Usage: $0 <install-dir>" >&2
+  echo "Usage: $0 <install-dir> [--force]" >&2
   exit 1
 fi
 
-if [[ -d "${INSTALL_DIR}" ]]; then
+if [[ -d "${INSTALL_DIR}" ]] && [[ "${FORCE}" != true ]]; then
   echo "Error: directory ${INSTALL_DIR} already exists" >&2
   exit 1
 fi
@@ -28,8 +33,12 @@ cd $INSTALL_DIR
 bash init.sh
 mkdir -p panel db
 
-wget https://github.com/bihealth/cbio-ingest/raw/refs/heads/main/docker/docker-compose.override.yml -O docker-compose.override.yml
-wget https://github.com/bihealth/cbio-ingest/raw/refs/heads/main/docker/env.example -O .env.cbio-ingest
+wget \
+  -O docker-compose.override.yml \
+  https://github.com/bihealth/cbio-ingest/raw/refs/heads/main/docker/docker-compose.override.yml
+wget \
+  -O .env.cbio-ingest \
+  https://github.com/bihealth/cbio-ingest/raw/refs/heads/main/docker/env.example
 
 docker compose pull
 docker compose up -d
@@ -55,4 +64,12 @@ docker compose logs --follow
 
 http://localhost:8080 (cbioportal)
 http://localhost:8000 (cbio-ingest)
+
+# the api documentation is available at:
+
+http://localhost:8000/docs
+
+# you might want to install the cli for cbio-ingest:
+
+https://github.com/bihealth/cbio-ingest-cli
 EOF

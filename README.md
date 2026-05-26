@@ -33,10 +33,10 @@ source .venv/bin/activate
 Then, start the server and worker:
 
 ```bash
-# Terminal 1
+# terminal 1
 make serve
 
-# Terminal 2
+# terminal 2
 make worker
 ```
 
@@ -78,12 +78,66 @@ cp docker/docker-compose.override.yml ../cbioportal-docker-compose
 cp docker/env.example ../cbioportal-docker-compose/.env.cbio-ingest
 ```
 
+There is a script available that sets up cBioPortal from the official sources and copies the
+cbio-ingest Docker files to that repository:
+
+```bash
+bash utils/install-cbioportal.sh <installation_folder>
+```
+
+This will create the <installation_folder> from where the script is called.
+
+## Data provisioning
+
+For the data provisioning you need to copy your panels and studies to the subfolders. Note that
+cbio-ingest as well as cBioPortal should have access to the folders, so both folders should be
+mounted in both containers as provided in the `docker/docker-compose.override.yml`:
+
+```yml
+services:
+  cbioportal:
+    volumes:
+      - ./panel:/panel:ro
+
+  api:
+    volumes:
+      - ./study:/app/study:ro
+      - ./panel:/app/panel:ro
+```
+
+### Panels
+
+Place them as text files flat (i.e. without folder structure) in the `panel/` directory, e.g.
+
+```bash
+ls -1 panel
+data_gene_panel_impact230.txt
+data_gene_panel_impact300.txt
+data_gene_panel_impact341.txt
+data_gene_panel_impact410.txt
+data_gene_panel_impact468.txt
+data_gene_panel_impact505.txt
+```
+
+### Studies
+
+The studies should be unpacked in the `study/` directory. Only folders are read and each folder is
+assumed to be a study.
+
+```bash
+ls -1 study
+init.sh
+lgg_ucsf_2014
+lgg_ucsf_2014.tar.gz
+msk_impact_2017
+msk_impact_2017.tar.gz
+```
+
 ## Access
 
-The server in development instance is reachable via http://localhost:8000.
+The server is reachable via http://localhost:8000.
 
 To access the API schema, navigate to http://localhost:8000/docs.
-
 
 ## Database Migrations
 
@@ -95,7 +149,8 @@ A typical workflow looks like this:
 # 1. change a model in models.py, then:
 make db-migration msg="add new_field to study"
 
-# 2. review the generated file in migrations/versions/, fill in downgrade()
+# 2. review the generated file in migrations/versions/
+#    there might be changes needed in the downgrade() function
 
 # 3. apply it
 make db-migrate
