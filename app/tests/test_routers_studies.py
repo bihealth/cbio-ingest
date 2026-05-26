@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Status, Study
+from app.models import Panel, Status, Study
 
 
 class TestStudiesRouter:
@@ -187,7 +187,7 @@ class TestStudiesRouter:
             auth_headers: dict[str, str],
             session: Session,
         ):
-            """Test creating a study that's already in progress."""
+            """Test creating a study that's already in progress without force."""
             # Add an in-progress study
             study = Study(name="inprogress-study", status=Status.IN_PROGRESS)
             session.add(study)
@@ -200,6 +200,34 @@ class TestStudiesRouter:
             )
             assert response.status_code == 400
             assert response.json()["detail"] == "Study ingestion in progress"
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_force_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test force re-ingesting a study that's already in progress."""
+            study = Study(name="inprogress-study-force", status=Status.IN_PROGRESS)
+            session.add(study)
+            session.commit()
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force-inprogress"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/?force=true",
+                json={"name": "inprogress-study-force"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert data["name"] == "inprogress-study-force"
+            assert data["job_id"] == "job-force-inprogress"
+            assert mock_queue.enqueue.called
 
         @patch("app.routers.studies.queue")
         def test_create_study_retry_failed(
@@ -378,6 +406,77 @@ class TestStudiesRouter:
             )
             assert response.status_code == 201
             assert len(response.json()["logs"]) == 1
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_conflict_when_another_study_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that creating a study returns 409 when another study ingestion is in
+            progress."""
+            other_study = Study(name="other-study", status=Status.IN_PROGRESS)
+            session.add(other_study)
+            session.commit()
+
+            response = client.post(
+                "/studies/",
+                json={"name": "new-study"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 409
+            assert response.json()["detail"] == "Another ingestion is already in progress"
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_conflict_when_panel_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that creating a study returns 409 when a panel ingestion is in progress."""
+            panel = Panel(name="other-panel.txt", status=Status.IN_PROGRESS)
+            session.add(panel)
+            session.commit()
+
+            response = client.post(
+                "/studies/",
+                json={"name": "new-study"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 409
+            assert response.json()["detail"] == "Another ingestion is already in progress"
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_force_bypasses_conflict(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that force=true bypasses the 409 conflict check."""
+            other_study = Study(name="other-study", status=Status.IN_PROGRESS)
+            session.add(other_study)
+            session.commit()
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force-conflict"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/?force=true",
+                json={"name": "new-study"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert data["name"] == "new-study"
+            assert data["job_id"] == "job-force-conflict"
+            assert mock_queue.enqueue.called
 
         def test_create_study_unauthorized(self, client: TestClient):
             """Test creating a study without authentication."""

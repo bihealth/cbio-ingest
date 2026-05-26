@@ -2,6 +2,7 @@ import codecs
 import os
 from datetime import UTC, datetime
 
+from rq.timeouts import JobTimeoutException
 from sqlmodel import Session
 
 import docker
@@ -41,7 +42,9 @@ def _run_ingest(
 ) -> None:
     mark_in_progress(entity, session)
 
-    client: docker.DockerClient = docker.from_env(timeout=3600)  # 1 hour timeout
+    client: docker.DockerClient = docker.from_env(
+        timeout=int(os.getenv("JOB_TIMEOUT", "43200"))
+    )  # 12 hour timeout
 
     try:
         container = client.containers.get(
@@ -112,7 +115,12 @@ def _run_ingest(
                 session,
             )
 
+    except JobTimeoutException:
+        session.rollback()
+        mark_failed(entity, "Job exceeded maximum timeout", session)
+        raise
     except Exception as e:
+        session.rollback()
         mark_failed(entity, f"Ingestion failed: {e}", session)
         raise
 

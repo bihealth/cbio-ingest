@@ -54,12 +54,11 @@ async def create_panel(
     panel = fs.get_ingested_panel(data.name)
 
     if panel:
-        if panel.status == Status.COMPLETED:
-            if not force:
-                raise HTTPException(status_code=400, detail="Panel ingested successfully")
-        if panel.status == Status.IN_PROGRESS:
+        if panel.status == Status.COMPLETED and not force:
+            raise HTTPException(status_code=400, detail="Panel ingested successfully")
+        elif panel.status == Status.IN_PROGRESS and not force:
             raise HTTPException(status_code=400, detail="Panel ingestion in progress")
-        if panel.status in (Status.FAILED, Status.COMPLETED):
+        if panel.status in (Status.FAILED, Status.COMPLETED, Status.IN_PROGRESS):
             panel.status = Status.INITIAL
             panel.job_id = None
             panel.date_ingested = None
@@ -78,10 +77,10 @@ async def create_panel(
     if (
         session.exec(select(Study).where(Study.status == Status.IN_PROGRESS)).first()
         or session.exec(select(Panel).where(Panel.status == Status.IN_PROGRESS)).first()
-    ):
+    ) and not force:
         raise HTTPException(status_code=409, detail="Another ingestion is already in progress")
 
-    job_timeout = int(os.getenv("JOB_TIMEOUT", "3600"))
+    job_timeout = int(os.getenv("JOB_TIMEOUT", "43200"))  # 12 hours
     job = queue.enqueue(ingest_panel, panel.id, job_timeout=job_timeout)
 
     panel.job_id = job.id
