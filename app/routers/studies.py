@@ -54,12 +54,11 @@ async def create_study(
     study = fs.get_ingested_study(data.name)
 
     if study:
-        if study.status == Status.COMPLETED:
-            if not force:
-                raise HTTPException(status_code=400, detail="Study ingested successfully")
-        if study.status == Status.IN_PROGRESS:
+        if study.status == Status.COMPLETED and not force:
+            raise HTTPException(status_code=400, detail="Study ingested successfully")
+        elif study.status == Status.IN_PROGRESS and not force:
             raise HTTPException(status_code=400, detail="Study ingestion in progress")
-        if study.status in (Status.FAILED, Status.COMPLETED):
+        if study.status in (Status.FAILED, Status.COMPLETED, Status.IN_PROGRESS):
             study.status = Status.INITIAL
             study.job_id = None
             study.date_ingested = None
@@ -78,10 +77,10 @@ async def create_study(
     if (
         session.exec(select(Study).where(Study.status == Status.IN_PROGRESS)).first()
         or session.exec(select(Panel).where(Panel.status == Status.IN_PROGRESS)).first()
-    ):
+    ) and not force:
         raise HTTPException(status_code=409, detail="Another ingestion is already in progress")
 
-    job_timeout = int(os.getenv("JOB_TIMEOUT", "3600"))
+    job_timeout = int(os.getenv("JOB_TIMEOUT", "43200"))  # 12 hours
     job = queue.enqueue(ingest_study, study.id, job_timeout=job_timeout)
 
     study.job_id = job.id

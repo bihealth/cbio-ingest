@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Panel, Status
+from app.models import Panel, Status, Study
 
 
 class TestPanelsRouter:
@@ -187,7 +187,7 @@ class TestPanelsRouter:
             auth_headers: dict[str, str],
             session: Session,
         ):
-            """Test creating a panel that's already in progress."""
+            """Test creating a panel that's already in progress without force."""
             # Add an in-progress panel
             panel = Panel(name="inprogress-panel.txt", status=Status.IN_PROGRESS)
             session.add(panel)
@@ -200,6 +200,34 @@ class TestPanelsRouter:
             )
             assert response.status_code == 400
             assert response.json()["detail"] == "Panel ingestion in progress"
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_force_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test force re-ingesting a panel that's already in progress."""
+            panel = Panel(name="inprogress-panel-force.txt", status=Status.IN_PROGRESS)
+            session.add(panel)
+            session.commit()
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force-inprogress"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/panels/?force=true",
+                json={"name": "inprogress-panel-force.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert data["name"] == "inprogress-panel-force.txt"
+            assert data["job_id"] == "job-force-inprogress"
+            assert mock_queue.enqueue.called
 
         @patch("app.routers.panels.queue")
         def test_create_panel_retry_failed(
@@ -378,6 +406,77 @@ class TestPanelsRouter:
             )
             assert response.status_code == 201
             assert len(response.json()["logs"]) == 1
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_conflict_when_study_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that creating a panel returns 409 when a study ingestion is in progress."""
+            other_study = Study(name="other-study", status=Status.IN_PROGRESS)
+            session.add(other_study)
+            session.commit()
+
+            response = client.post(
+                "/panels/",
+                json={"name": "new-panel.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 409
+            assert response.json()["detail"] == "Another ingestion is already in progress"
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_conflict_when_another_panel_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that creating a panel returns 409 when another panel ingestion is in
+            progress."""
+            other_panel = Panel(name="other-panel.txt", status=Status.IN_PROGRESS)
+            session.add(other_panel)
+            session.commit()
+
+            response = client.post(
+                "/panels/",
+                json={"name": "new-panel.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 409
+            assert response.json()["detail"] == "Another ingestion is already in progress"
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_force_bypasses_conflict(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that force=true bypasses the 409 conflict check."""
+            other_study = Study(name="other-study", status=Status.IN_PROGRESS)
+            session.add(other_study)
+            session.commit()
+
+            mock_job = MagicMock()
+            mock_job.id = "job-force-conflict"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/panels/?force=true",
+                json={"name": "new-panel.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            assert data["name"] == "new-panel.txt"
+            assert data["job_id"] == "job-force-conflict"
+            assert mock_queue.enqueue.called
 
         def test_create_panel_unauthorized(self, client: TestClient):
             """Test creating a panel without authentication."""

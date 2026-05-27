@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+from rq.timeouts import JobTimeoutException
 from sqlmodel import Session
 
 from app.models import LogLevel, Panel, Status, Study
@@ -146,7 +147,7 @@ class TestIngestStudy:
             ingest_study(1)
 
         # Verify Docker operations
-        mock_docker.from_env.assert_called_once_with(timeout=3600)
+        mock_docker.from_env.assert_called_once_with(timeout=43200)
         mock_client.containers.get.assert_called_once_with("test-container")
         mock_client.api.exec_create.assert_called_once()
         mock_client.api.exec_start.assert_called_once()
@@ -239,6 +240,33 @@ class TestIngestStudy:
         # Verify study was marked as failed
         assert study.status == Status.FAILED
 
+    @patch("app.tasks.docker")
+    @patch("app.tasks.Session")
+    def test_ingest_study_timeout(self, mock_session_class: Mock, mock_docker: Mock):
+        """Test study ingestion when the job timeout is exceeded."""
+        session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = session
+
+        study = Study(id=1, name="test-study", status=Status.INITIAL)
+        session.get.return_value = study
+
+        mock_client = MagicMock()
+        mock_docker.from_env.return_value = mock_client
+
+        mock_container = MagicMock()
+        mock_client.containers.get.return_value = mock_container
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-timeout"}
+        mock_client.api.exec_start.side_effect = JobTimeoutException(
+            "Task exceeded maximum timeout value (43200 seconds)"
+        )
+
+        with pytest.raises(JobTimeoutException):
+            ingest_study(1)
+
+        assert study.status == Status.FAILED
+        assert "maximum timeout" in study.logs[-1]["message"]
+        session.rollback.assert_called_once()
+
 
 class TestIngestPanel:
     """Tests for ingest_panel function."""
@@ -268,7 +296,7 @@ class TestIngestPanel:
         with patch.dict("os.environ", {"CBIOPORTAL_CONTAINER_NAME": "test-container"}):
             ingest_panel(1)
 
-        mock_docker.from_env.assert_called_once_with(timeout=3600)
+        mock_docker.from_env.assert_called_once_with(timeout=43200)
         mock_client.containers.get.assert_called_once_with("test-container")
         mock_client.api.exec_create.assert_called_once()
         mock_client.api.exec_start.assert_called_once()
@@ -334,3 +362,30 @@ class TestIngestPanel:
             ingest_panel(1)
 
         assert panel.status == Status.FAILED
+
+    @patch("app.tasks.docker")
+    @patch("app.tasks.Session")
+    def test_ingest_panel_timeout(self, mock_session_class: Mock, mock_docker: Mock):
+        """Test panel ingestion when the job timeout is exceeded."""
+        session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = session
+
+        panel = Panel(id=1, name="test-panel.txt", status=Status.INITIAL)
+        session.get.return_value = panel
+
+        mock_client = MagicMock()
+        mock_docker.from_env.return_value = mock_client
+
+        mock_container = MagicMock()
+        mock_client.containers.get.return_value = mock_container
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-timeout"}
+        mock_client.api.exec_start.side_effect = JobTimeoutException(
+            "Task exceeded maximum timeout value (43200 seconds)"
+        )
+
+        with pytest.raises(JobTimeoutException):
+            ingest_panel(1)
+
+        assert panel.status == Status.FAILED
+        assert "maximum timeout" in panel.logs[-1]["message"]
+        session.rollback.assert_called_once()
