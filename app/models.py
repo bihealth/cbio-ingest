@@ -36,10 +36,40 @@ class Study(StudyPanelBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
+class StudyResponse(StudyPanelBase):
+    """Study response model with additional fields for API responses."""
+
+    id: Optional[int]
+    in_source_folder: bool
+
+    @classmethod
+    def augment(
+        cls,
+        study: Study,
+        in_source_folder: bool = False,
+    ) -> "StudyResponse":
+        return cls(**study.model_dump(), in_source_folder=in_source_folder)
+
+
 class Panel(StudyPanelBase, table=True):
     """Panel ingestion result."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
+
+
+class PanelResponse(StudyPanelBase):
+    """Panel response model with additional fields for API responses."""
+
+    id: Optional[int]
+    in_source_folder: bool
+
+    @classmethod
+    def augment(
+        cls,
+        panel: Panel,
+        in_source_folder: bool = False,
+    ) -> "PanelResponse":
+        return cls(**panel.model_dump(), in_source_folder=in_source_folder)
 
 
 class IngestQuery(SQLModel):

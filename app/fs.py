@@ -5,7 +5,7 @@ from fastapi import Depends
 from sqlmodel import Session, select
 
 from app.db import get_session
-from app.models import Panel, Status, Study
+from app.models import Panel, PanelResponse, Status, Study, StudyResponse
 
 
 class FileSystemService:
@@ -25,7 +25,11 @@ class FileSystemService:
         stmt = select(Panel).where(Panel.name == name)
         return self.session.exec(stmt).first()
 
-    def list_studies(self) -> list[Study]:
+    def path_exists_on_disk(self, name: str) -> bool:
+        """Check if a path exists on disk."""
+        return (self.base_path / name).exists()
+
+    def list_studies(self) -> list[StudyResponse]:
         """List all studies in the base path."""
         studies = []
 
@@ -40,10 +44,10 @@ class FileSystemService:
                         name=entry.name,
                         status=Status.INITIAL,
                     )
-                studies.append(study)
+                studies.append(StudyResponse.augment(study, in_source_folder=True))
         return studies
 
-    def list_panels(self) -> list[Panel]:
+    def list_panels(self) -> list[PanelResponse]:
         """List all panels in the base path."""
         panels = []
 
@@ -58,7 +62,7 @@ class FileSystemService:
                         name=entry.name,
                         status=Status.INITIAL,
                     )
-                panels.append(panel)
+                panels.append(PanelResponse.augment(panel, in_source_folder=True))
         return panels
 
 

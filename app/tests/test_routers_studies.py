@@ -12,6 +12,17 @@ from app.models import Panel, Status, Study
 class TestStudiesRouter:
     """Tests for studies router endpoints."""
 
+    @staticmethod
+    def _create_study_source(name: str) -> None:
+        study_root = Path("/tmp")
+        from os import getenv
+
+        study_dir = getenv("STUDY_DIR")
+        if study_dir:
+            study_root = Path(study_dir)
+        study_root.mkdir(parents=True, exist_ok=True)
+        (study_root / name).mkdir(parents=True, exist_ok=True)
+
     class TestListStudies:
         """Tests for GET /studies/ endpoint."""
 
@@ -49,85 +60,60 @@ class TestStudiesRouter:
             response = client.get("/studies/", headers={"Authorization": "Bearer invalid"})
             assert response.status_code == 401
 
-    class TestListStudiesAll:
-        """Tests for GET /studies/?all endpoint."""
+    class TestListStudiesUnion:
+        """Tests for merged DB + source listing on GET /studies/."""
 
-        def test_all_studies_empty(self, client: TestClient, auth_headers: dict[str, str]):
-            """Test ?all when both DB and filesystem are empty."""
-            response = client.get("/studies/?all", headers=auth_headers)
-            assert response.status_code == 200
-            assert response.json() == []
-
-        def test_all_studies_db_only(
+        def test_list_studies_db_only_sets_in_source_false(
             self, client: TestClient, auth_headers: dict[str, str], session: Session
         ):
-            """Test ?all returns DB studies even when not on disk."""
+            """Test DB-only studies are returned with in_source_folder=False."""
             study = Study(name="db-only-study", status=Status.COMPLETED)
             session.add(study)
             session.commit()
 
-            response = client.get("/studies/?all", headers=auth_headers)
+            response = client.get("/studies/", headers=auth_headers)
             assert response.status_code == 200
             data = response.json()
             assert len(data) == 1
             assert data[0]["name"] == "db-only-study"
-            assert data[0]["status"] == "completed"
+            assert data[0]["in_source_folder"] is False
 
-        def test_all_studies_merges_db_and_fs(
-            self, client: TestClient, auth_headers: dict[str, str], session: Session
-        ):
-            """Test ?all merges DB records and filesystem-only studies without duplicates."""
-            study = Study(name="study1", status=Status.COMPLETED)
-            session.add(study)
-            session.commit()
-
-            response = client.get("/studies/?all", headers=auth_headers)
-            assert response.status_code == 200
-            data = response.json()
-            names = [s["name"] for s in data]
-            # DB study present
-            assert "study1" in names
-            # No duplicates
-            assert len(names) == len(set(names))
-
-        def test_all_studies_unauthorized(self, client: TestClient):
-            """Test ?all without authentication."""
-            response = client.get("/studies/?all")
-            assert response.status_code == 401
-
-    class TestListStudiesAvailable:
-        """Tests for GET /studies/?available endpoint."""
-
-        def test_scan_studies_empty_directory(
+        def test_list_studies_source_only_sets_in_source_true(
             self, client: TestClient, auth_headers: dict[str, str], tmp_path: Path
         ):
-            """Test scanning studies in empty directory."""
-            response = client.get("/studies/?available", headers=auth_headers)
-            assert response.status_code == 200
-            assert response.json() == []
-
-        def test_scan_studies_with_directories(
-            self, client: TestClient, auth_headers: dict[str, str], tmp_path: Path
-        ):
-            """Test scanning studies with directories present."""
-            # Create study directories
+            """Test source-only studies are returned with in_source_folder=True."""
             study_dir = Path(tmp_path / "studies")
             study_dir.mkdir(exist_ok=True)
-            (study_dir / "study1").mkdir()
-            (study_dir / "study2").mkdir()
+            (study_dir / "source-only-study").mkdir()
 
-            response = client.get("/studies/?available", headers=auth_headers)
+            response = client.get("/studies/", headers=auth_headers)
             assert response.status_code == 200
             data = response.json()
-            assert len(data) == 2
-            study_names = [s["name"] for s in data]
-            assert "study1" in study_names
-            assert "study2" in study_names
+            assert len(data) == 1
+            assert data[0]["name"] == "source-only-study"
+            assert data[0]["in_source_folder"] is True
+            assert data[0]["status"] == "initial"
 
-        def test_scan_studies_unauthorized(self, client: TestClient):
-            """Test scanning studies without authentication."""
-            response = client.get("/studies/?available")
-            assert response.status_code == 401
+        def test_list_studies_merges_sources_without_duplicates(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test merged list has shared, DB-only, and source-only entries with proper flags."""
+            session.add(Study(name="shared-study", status=Status.COMPLETED))
+            session.add(Study(name="db-only-study", status=Status.FAILED))
+            session.commit()
+            TestStudiesRouter._create_study_source("shared-study")
+            TestStudiesRouter._create_study_source("source-only-study")
+
+            response = client.get("/studies/", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            by_name = {item["name"]: item for item in data}
+
+            assert set(by_name.keys()) == {"shared-study", "db-only-study", "source-only-study"}
+            assert by_name["shared-study"]["in_source_folder"] is True
+            assert by_name["shared-study"]["status"] == "completed"
+            assert by_name["db-only-study"]["in_source_folder"] is False
+            assert by_name["source-only-study"]["in_source_folder"] is True
 
     class TestCreateStudy:
         """Tests for POST /studies/ endpoint."""
@@ -217,6 +203,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-inprogress"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("inprogress-study-force")
 
             response = client.post(
                 "/studies/?force=true",
@@ -247,6 +234,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-456"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("failed-study")
 
             response = client.post(
                 "/studies/",
@@ -280,6 +268,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-789"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("failed-study-logs")
 
             response = client.post(
                 "/studies/",
@@ -310,6 +299,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-789"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("failed-study-keeplogs")
 
             response = client.post(
                 "/studies/?keep_logs=true",
@@ -335,6 +325,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("completed-study-force")
 
             response = client.post(
                 "/studies/?force=true",
@@ -368,6 +359,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-logs"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("completed-study-force-logs")
 
             response = client.post(
                 "/studies/?force=true",
@@ -398,6 +390,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-keeplogs"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("completed-study-force-keeplogs")
 
             response = client.post(
                 "/studies/?force=true&keep_logs=true",

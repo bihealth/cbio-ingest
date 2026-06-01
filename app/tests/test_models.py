@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import attributes
 from sqlmodel import Session
 
-from app.models import IngestQuery, LogLevel, Panel, Status, Study
+from app.models import IngestQuery, LogLevel, Panel, PanelResponse, Status, Study, StudyResponse
 
 
 class TestStatus:
@@ -170,3 +170,41 @@ class TestIngestQuery:
         with pytest.raises(ValidationError):
             # pyrefly: ignore [missing-argument]
             IngestQuery()  # pyright: ignore[reportCallIssue]
+
+
+class TestResponseAugment:
+    """Tests for StudyResponse/PanelResponse augment helpers."""
+
+    def test_study_augment_uses_explicit_in_source_folder(self):
+        """Test explicit in_source_folder is preserved."""
+        study = Study(name="study-a", status=Status.INITIAL)
+
+        response = StudyResponse.augment(study, in_source_folder=True)
+
+        assert response.name == "study-a"
+        assert response.in_source_folder is True
+
+    def test_study_augment_defaults_in_source_folder_to_false(self):
+        """Test in_source_folder defaults to False when omitted."""
+        study = Study(name="study-default", status=Status.INITIAL)
+
+        response = StudyResponse.augment(study)
+
+        assert response.in_source_folder is False
+
+    def test_panel_augment_uses_explicit_in_source_folder(self):
+        """Test explicit in_source_folder is preserved."""
+        panel = Panel(name="panel-a.txt", status=Status.INITIAL)
+
+        response = PanelResponse.augment(panel, in_source_folder=False)
+
+        assert response.name == "panel-a.txt"
+        assert response.in_source_folder is False
+
+    def test_panel_augment_defaults_in_source_folder_to_false(self):
+        """Test in_source_folder defaults to False when omitted."""
+        panel = Panel(name="panel-default.txt", status=Status.INITIAL)
+
+        response = PanelResponse.augment(panel)
+
+        assert response.in_source_folder is False

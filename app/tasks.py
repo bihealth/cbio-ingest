@@ -140,8 +140,6 @@ def ingest_study(study_id: int) -> None:
 
         cmd = [
             "metaImport.py",
-            "-u",
-            "http://cbioportal:8080",
             "-s",
             f"/study/{validated_name}",
             "-o",
