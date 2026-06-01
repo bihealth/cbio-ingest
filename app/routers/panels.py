@@ -16,32 +16,20 @@ router = APIRouter(responses={401: {"description": "Unauthorized"}})
 
 @router.get("/")
 async def list_panels(
-    available: str | None = Query(default=None),
-    all: str | None = Query(default=None),
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_panels),
     token=Depends(verify_token),
 ) -> list[PanelResponse]:
-    """List all ingested panels.
-
-    Pass `?available` to list panels on disk instead.
-    Pass `?all` to merge both.
-    """
-    if available is not None:
-        return fs.list_panels()
-
-    if all is not None:
-        db_panels = list(session.exec(select(Panel)).all())
-        fs_panels = fs.list_panels()
-        fs_names = {s.name for s in fs_panels}
-        db_only = [
-            PanelResponse.augment(panel, in_source_folder=False)
-            for panel in db_panels
-            if panel.name not in fs_names
-        ]
-        return fs_panels + db_only
-
-    return [PanelResponse.augment(panel) for panel in session.exec(select(Panel)).all()]
+    """List all ingested panels."""
+    db_panels = list(session.exec(select(Panel)).all())
+    fs_panels = fs.list_panels()
+    fs_names = {s.name for s in fs_panels}
+    db_only = [
+        PanelResponse.augment(panel, in_source_folder=False)
+        for panel in db_panels
+        if panel.name not in fs_names
+    ]
+    return fs_panels + db_only
 
 
 @router.post(

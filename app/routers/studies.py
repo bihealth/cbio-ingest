@@ -16,35 +16,20 @@ router = APIRouter(responses={401: {"description": "Unauthorized"}})
 
 @router.get("/")
 async def list_studies(
-    available: str | None = Query(default=None),
-    all: str | None = Query(default=None),
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_studies),
     token=Depends(verify_token),
 ) -> list[StudyResponse]:
-    """List all ingested studies.
-
-    Pass `?available` to list studies on disk instead.
-    Pass `?all` to merge both.
-    """
-    if available is not None:
-        return fs.list_studies()
-
-    if all is not None:
-        db_studies = list(session.exec(select(Study)).all())
-        fs_studies = fs.list_studies()
-        fs_names = {s.name for s in fs_studies}
-        db_only = [
-            StudyResponse.augment(study, in_source_folder=False)
-            for study in db_studies
-            if study.name not in fs_names
-        ]
-        return fs_studies + db_only
-
-    return [
-        StudyResponse.augment(study, in_source_folder=fs.path_exists_on_disk(study.name))
-        for study in session.exec(select(Study)).all()
+    """List all ingested studies."""
+    db_studies = list(session.exec(select(Study)).all())
+    fs_studies = fs.list_studies()
+    fs_names = {s.name for s in fs_studies}
+    db_only = [
+        StudyResponse.augment(study, in_source_folder=False)
+        for study in db_studies
+        if study.name not in fs_names
     ]
+    return fs_studies + db_only
 
 
 @router.post(

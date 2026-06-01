@@ -26,11 +26,6 @@ class TestStudiesSmoke:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    def test_list_studies_available(self, client: TestClient, auth_headers: dict):
-        response = client.get("/studies/?available", headers=auth_headers)
-        assert response.status_code == 200
-        assert isinstance(response.json(), list)
-
     def test_list_studies_requires_auth(self, client: TestClient):
         response = client.get("/studies/")
         assert response.status_code == 401
@@ -53,11 +48,6 @@ class TestStudiesSmoke:
 class TestPanelsSmoke:
     def test_list_panels(self, client: TestClient, auth_headers: dict):
         response = client.get("/panels/", headers=auth_headers)
-        assert response.status_code == 200
-        assert isinstance(response.json(), list)
-
-    def test_list_panels_available(self, client: TestClient, auth_headers: dict):
-        response = client.get("/panels/?available", headers=auth_headers)
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 

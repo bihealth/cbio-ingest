@@ -60,85 +60,60 @@ class TestPanelsRouter:
             response = client.get("/panels/", headers={"Authorization": "Bearer invalid"})
             assert response.status_code == 401
 
-    class TestListPanelsAll:
-        """Tests for GET /panels/?all endpoint."""
+    class TestListPanelsUnion:
+        """Tests for merged DB + source listing on GET /panels/."""
 
-        def test_all_panels_empty(self, client: TestClient, auth_headers: dict[str, str]):
-            """Test ?all when both DB and filesystem are empty."""
-            response = client.get("/panels/?all", headers=auth_headers)
-            assert response.status_code == 200
-            assert response.json() == []
-
-        def test_all_panels_db_only(
+        def test_list_panels_db_only_sets_in_source_false(
             self, client: TestClient, auth_headers: dict[str, str], session: Session
         ):
-            """Test ?all returns DB panels even when not on disk."""
+            """Test DB-only panels are returned with in_source_folder=False."""
             panel = Panel(name="db-only.txt", status=Status.COMPLETED)
             session.add(panel)
             session.commit()
 
-            response = client.get("/panels/?all", headers=auth_headers)
+            response = client.get("/panels/", headers=auth_headers)
             assert response.status_code == 200
             data = response.json()
             assert len(data) == 1
             assert data[0]["name"] == "db-only.txt"
-            assert data[0]["status"] == "completed"
+            assert data[0]["in_source_folder"] is False
 
-        def test_all_panels_merges_db_and_fs(
-            self, client: TestClient, auth_headers: dict[str, str], session: Session
-        ):
-            """Test ?all merges DB records and filesystem-only panels without duplicates."""
-            panel = Panel(name="panel1.txt", status=Status.COMPLETED)
-            session.add(panel)
-            session.commit()
-
-            response = client.get("/panels/?all", headers=auth_headers)
-            assert response.status_code == 200
-            data = response.json()
-            names = [p["name"] for p in data]
-            # DB panel present
-            assert "panel1.txt" in names
-            # No duplicates
-            assert len(names) == len(set(names))
-
-        def test_all_panels_unauthorized(self, client: TestClient):
-            """Test ?all without authentication."""
-            response = client.get("/panels/?all")
-            assert response.status_code == 401
-
-    class TestListPanelsAvailable:
-        """Tests for GET /panels/?available endpoint."""
-
-        def test_scan_panels_empty_directory(
+        def test_list_panels_source_only_sets_in_source_true(
             self, client: TestClient, auth_headers: dict[str, str], tmp_path: Path
         ):
-            """Test scanning panels in empty directory."""
-            response = client.get("/panels/?available", headers=auth_headers)
-            assert response.status_code == 200
-            assert response.json() == []
-
-        def test_scan_panels_with_files(
-            self, client: TestClient, auth_headers: dict[str, str], tmp_path: Path
-        ):
-            """Test scanning panels with files present."""
-            # Create panel files
+            """Test source-only panels are returned with in_source_folder=True."""
             panel_dir = Path(tmp_path / "panels")
             panel_dir.mkdir(exist_ok=True)
-            (panel_dir / "panel1.txt").touch()
-            (panel_dir / "panel2.txt").touch()
+            (panel_dir / "source-only.txt").touch()
 
-            response = client.get("/panels/?available", headers=auth_headers)
+            response = client.get("/panels/", headers=auth_headers)
             assert response.status_code == 200
             data = response.json()
-            assert len(data) == 2
-            panel_names = [p["name"] for p in data]
-            assert "panel1.txt" in panel_names
-            assert "panel2.txt" in panel_names
+            assert len(data) == 1
+            assert data[0]["name"] == "source-only.txt"
+            assert data[0]["in_source_folder"] is True
+            assert data[0]["status"] == "initial"
 
-        def test_scan_panels_unauthorized(self, client: TestClient):
-            """Test scanning panels without authentication."""
-            response = client.get("/panels/?available")
-            assert response.status_code == 401
+        def test_list_panels_merges_sources_without_duplicates(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test merged list has shared, DB-only, and source-only entries with proper flags."""
+            session.add(Panel(name="shared.txt", status=Status.COMPLETED))
+            session.add(Panel(name="db-only.txt", status=Status.FAILED))
+            session.commit()
+            TestPanelsRouter._create_panel_source("shared.txt")
+            TestPanelsRouter._create_panel_source("source-only.txt")
+
+            response = client.get("/panels/", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            by_name = {item["name"]: item for item in data}
+
+            assert set(by_name.keys()) == {"shared.txt", "db-only.txt", "source-only.txt"}
+            assert by_name["shared.txt"]["in_source_folder"] is True
+            assert by_name["shared.txt"]["status"] == "completed"
+            assert by_name["db-only.txt"]["in_source_folder"] is False
+            assert by_name["source-only.txt"]["in_source_folder"] is True
 
     class TestCreatePanel:
         """Tests for POST /panels/ endpoint."""
