@@ -49,13 +49,11 @@ class StudyResponse(StudyPanelBase):
         in_source_folder: bool = False,
         check_source: bool = False,
     ) -> "StudyResponse":
-        from app.fs import FileSystemService, get_fs_service_studies
-
-        fs: FileSystemService = get_fs_service_studies()
-
         if check_source:
-            in_source_folder = fs.path_exists_on_disk(study.name)
+            from app.fs import get_fs_service_studies
 
+            fs = get_fs_service_studies()
+            in_source_folder = fs.path_exists_on_disk(study.name)
         return cls(**study.model_dump(), in_source_folder=in_source_folder)
 
 
