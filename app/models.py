@@ -76,13 +76,11 @@ class PanelResponse(StudyPanelBase):
         in_source_folder: bool = False,
         check_source: bool = False,
     ) -> "PanelResponse":
-        from app.fs import FileSystemService, get_fs_service_panels
-
-        fs: FileSystemService = get_fs_service_panels()
-
         if check_source:
-            in_source_folder = fs.path_exists_on_disk(panel.name)
+            from app.fs import get_fs_service_panels
 
+            fs = get_fs_service_panels()
+            in_source_folder = fs.path_exists_on_disk(panel.name)
         return cls(**panel.model_dump(), in_source_folder=in_source_folder)
 
 
