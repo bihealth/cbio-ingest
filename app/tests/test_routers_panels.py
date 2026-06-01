@@ -12,6 +12,17 @@ from app.models import Panel, Status, Study
 class TestPanelsRouter:
     """Tests for panels router endpoints."""
 
+    @staticmethod
+    def _create_panel_source(name: str) -> None:
+        panel_root = Path("/tmp")
+        from os import getenv
+
+        panel_dir = getenv("PANEL_DIR")
+        if panel_dir:
+            panel_root = Path(panel_dir)
+        panel_root.mkdir(parents=True, exist_ok=True)
+        (panel_root / name).touch()
+
     class TestListPanels:
         """Tests for GET /panels/ endpoint."""
 
@@ -217,6 +228,7 @@ class TestPanelsRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-inprogress"
             mock_queue.enqueue.return_value = mock_job
+            TestPanelsRouter._create_panel_source("inprogress-panel-force.txt")
 
             response = client.post(
                 "/panels/?force=true",
@@ -247,6 +259,7 @@ class TestPanelsRouter:
             mock_job = MagicMock()
             mock_job.id = "job-456"
             mock_queue.enqueue.return_value = mock_job
+            TestPanelsRouter._create_panel_source("failed-panel.txt")
 
             response = client.post(
                 "/panels/",
@@ -280,6 +293,7 @@ class TestPanelsRouter:
             mock_job = MagicMock()
             mock_job.id = "job-789"
             mock_queue.enqueue.return_value = mock_job
+            TestPanelsRouter._create_panel_source("failed-panel-logs.txt")
 
             response = client.post(
                 "/panels/",
@@ -310,6 +324,7 @@ class TestPanelsRouter:
             mock_job = MagicMock()
             mock_job.id = "job-789"
             mock_queue.enqueue.return_value = mock_job
+            TestPanelsRouter._create_panel_source("failed-panel-keeplogs.txt")
 
             response = client.post(
                 "/panels/?keep_logs=true",
@@ -335,6 +350,7 @@ class TestPanelsRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force"
             mock_queue.enqueue.return_value = mock_job
+            TestPanelsRouter._create_panel_source("completed-panel-force.txt")
 
             response = client.post(
                 "/panels/?force=true",
@@ -368,6 +384,7 @@ class TestPanelsRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-logs"
             mock_queue.enqueue.return_value = mock_job
+            TestPanelsRouter._create_panel_source("completed-panel-force-logs.txt")
 
             response = client.post(
                 "/panels/?force=true",
@@ -398,6 +415,7 @@ class TestPanelsRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-keeplogs"
             mock_queue.enqueue.return_value = mock_job
+            TestPanelsRouter._create_panel_source("completed-panel-force-keeplogs.txt")
 
             response = client.post(
                 "/panels/?force=true&keep_logs=true",

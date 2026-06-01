@@ -7,14 +7,14 @@ from fastapi.testclient import TestClient
 from hypothesis import HealthCheck, settings
 from openapi_spec_validator import validate
 from schemathesis.checks import CHECKS, load_all_checks
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, delete
 from sqlmodel.pool import StaticPool
 
 from app import APP_VERSION
 from app import main as main_module
 from app.db import get_session
 from app.main import app
-from app.models import Status
+from app.models import Panel, Status, Study
 
 load_all_checks()
 _unsupported_method_check = CHECKS.get_one("unsupported_method")
@@ -95,7 +95,7 @@ class TestOpenAPISpec:
 
         schemas = spec.get("components", {}).get("schemas", {})
 
-        expected_schemas = ["Study", "Panel", "IngestQuery"]
+        expected_schemas = ["StudyResponse", "PanelResponse", "IngestQuery"]
 
         for schema_name in expected_schemas:
             assert schema_name in schemas, f"Schema {schema_name} not found in OpenAPI spec"
@@ -105,7 +105,7 @@ class TestOpenAPISpec:
         response = client.get("/openapi.json")
         spec = response.json()
 
-        study_schema = spec["components"]["schemas"]["Study"]
+        study_schema = spec["components"]["schemas"]["StudyResponse"]
 
         assert "properties" in study_schema
         props = study_schema["properties"]
@@ -119,6 +119,7 @@ class TestOpenAPISpec:
             "command",
             "cbioportal_version",
             "id",
+            "in_source_folder",
         ]
 
         for field in expected_fields:
@@ -129,7 +130,7 @@ class TestOpenAPISpec:
         response = client.get("/openapi.json")
         spec = response.json()
 
-        panel_schema = spec["components"]["schemas"]["Panel"]
+        panel_schema = spec["components"]["schemas"]["PanelResponse"]
 
         assert "properties" in panel_schema
         props = panel_schema["properties"]
@@ -143,6 +144,7 @@ class TestOpenAPISpec:
             "command",
             "cbioportal_version",
             "id",
+            "in_source_folder",
         ]
 
         for field in expected_fields:
@@ -205,6 +207,12 @@ def test_api_conformance(case):
     mock_job.id = "test-job-id"
 
     with Session(_conformance_engine) as session:
+        # Keep each generated example independent and avoid stateful side effects
+        # between POST calls that may intentionally trigger business-rule 400s.
+        session.exec(delete(Study))
+        session.exec(delete(Panel))
+        session.commit()
+
         app.dependency_overrides[get_session] = lambda: session
         with patch.object(main_module, "engine", _conformance_engine):
             try:

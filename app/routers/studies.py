@@ -7,7 +7,7 @@ from sqlmodel import Session, select
 from app.auth import verify_token
 from app.db import get_session
 from app.fs import FileSystemService, get_fs_service_studies
-from app.models import IngestQuery, Panel, Status, Study
+from app.models import IngestQuery, Panel, Status, Study, StudyResponse
 from app.scheduler import queue
 from app.tasks import ingest_study
 
@@ -21,7 +21,7 @@ async def list_studies(
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_studies),
     token=Depends(verify_token),
-) -> list[Study]:
+) -> list[StudyResponse]:
     """List all ingested studies.
 
     Pass `?available` to list studies on disk instead.
@@ -29,12 +29,17 @@ async def list_studies(
     """
     if available is not None:
         return fs.list_studies()
+
     if all is not None:
         db_studies = list(session.exec(select(Study)).all())
-        db_names = {s.name for s in db_studies}
-        fs_only = [s for s in fs.list_studies() if s.name not in db_names]
-        return db_studies + fs_only
-    return list(session.exec(select(Study)).all())
+        fs_studies = fs.list_studies()
+        fs_names = {s.name for s in fs_studies}
+        db_only = [
+            StudyResponse.augment(study) for study in db_studies if study.name not in fs_names
+        ]
+        return fs_studies + db_only
+
+    return [StudyResponse.augment(study) for study in session.exec(select(Study)).all()]
 
 
 @router.post(
@@ -49,15 +54,20 @@ async def create_study(
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service_studies),
     token=Depends(verify_token),
-) -> Study:
+) -> StudyResponse:
     """Ingest a study into cBioPortal."""
     study = fs.get_ingested_study(data.name)
 
     if study:
         if study.status == Status.COMPLETED and not force:
             raise HTTPException(status_code=400, detail="Study ingested successfully")
+
         elif study.status == Status.IN_PROGRESS and not force:
             raise HTTPException(status_code=400, detail="Study ingestion in progress")
+
+        elif not fs.path_exists_on_disk(study.name):
+            raise HTTPException(status_code=400, detail="Study not found on disk")
+
         if study.status in (Status.FAILED, Status.COMPLETED, Status.IN_PROGRESS):
             study.status = Status.INITIAL
             study.job_id = None
@@ -68,6 +78,7 @@ async def create_study(
             session.add(study)
             session.commit()
             session.refresh(study)
+
     else:
         study = Study(name=data.name)
         session.add(study)
@@ -88,7 +99,7 @@ async def create_study(
     session.commit()
     session.refresh(study)
 
-    return study
+    return StudyResponse.augment(study, check_source=True)
 
 
 @router.get("/{study_id}", responses={404: {"description": "Not Found"}})
@@ -96,17 +107,18 @@ async def get_study(
     study_id: int,
     session: Session = Depends(get_session),
     token=Depends(verify_token),
-) -> Study:
+) -> StudyResponse:
     """Fetch a single study by ID."""
     try:
         study = session.get(Study, study_id)
+
     except OverflowError:
         raise HTTPException(status_code=404, detail="Study not found")
 
     if not study:
         raise HTTPException(status_code=404, detail="Study not found")
 
-    return study
+    return StudyResponse.augment(study, check_source=True)
 
 
 @router.delete("/{study_id}", responses={404: {"description": "Not Found"}})
@@ -118,6 +130,7 @@ async def delete_study(
     """Delete a study from cBioPortal."""
     try:
         study = session.get(Study, study_id)
+
     except OverflowError:
         raise HTTPException(status_code=404, detail="Study not found")
 

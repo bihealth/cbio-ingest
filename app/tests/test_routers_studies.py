@@ -12,6 +12,17 @@ from app.models import Panel, Status, Study
 class TestStudiesRouter:
     """Tests for studies router endpoints."""
 
+    @staticmethod
+    def _create_study_source(name: str) -> None:
+        study_root = Path("/tmp")
+        from os import getenv
+
+        study_dir = getenv("STUDY_DIR")
+        if study_dir:
+            study_root = Path(study_dir)
+        study_root.mkdir(parents=True, exist_ok=True)
+        (study_root / name).mkdir(parents=True, exist_ok=True)
+
     class TestListStudies:
         """Tests for GET /studies/ endpoint."""
 
@@ -217,6 +228,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-inprogress"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("inprogress-study-force")
 
             response = client.post(
                 "/studies/?force=true",
@@ -247,6 +259,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-456"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("failed-study")
 
             response = client.post(
                 "/studies/",
@@ -280,6 +293,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-789"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("failed-study-logs")
 
             response = client.post(
                 "/studies/",
@@ -310,6 +324,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-789"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("failed-study-keeplogs")
 
             response = client.post(
                 "/studies/?keep_logs=true",
@@ -335,6 +350,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("completed-study-force")
 
             response = client.post(
                 "/studies/?force=true",
@@ -368,6 +384,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-logs"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("completed-study-force-logs")
 
             response = client.post(
                 "/studies/?force=true",
@@ -398,6 +415,7 @@ class TestStudiesRouter:
             mock_job = MagicMock()
             mock_job.id = "job-force-keeplogs"
             mock_queue.enqueue.return_value = mock_job
+            TestStudiesRouter._create_study_source("completed-study-force-keeplogs")
 
             response = client.post(
                 "/studies/?force=true&keep_logs=true",

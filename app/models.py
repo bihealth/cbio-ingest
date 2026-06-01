@@ -36,10 +36,56 @@ class Study(StudyPanelBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
+class StudyResponse(StudyPanelBase):
+    """Study response model with additional fields for API responses."""
+
+    id: Optional[int]
+    in_source_folder: bool
+
+    @classmethod
+    def augment(
+        cls,
+        study: Study,
+        in_source_folder: bool = False,
+        check_source: bool = False,
+    ) -> "StudyResponse":
+        from app.fs import FileSystemService, get_fs_service_studies
+
+        fs: FileSystemService = get_fs_service_studies()
+
+        if check_source:
+            in_source_folder = fs.path_exists_on_disk(study.name)
+
+        return cls(**study.model_dump(), in_source_folder=in_source_folder)
+
+
 class Panel(StudyPanelBase, table=True):
     """Panel ingestion result."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
+
+
+class PanelResponse(StudyPanelBase):
+    """Panel response model with additional fields for API responses."""
+
+    id: Optional[int]
+    in_source_folder: bool
+
+    @classmethod
+    def augment(
+        cls,
+        panel: Panel,
+        in_source_folder: bool = False,
+        check_source: bool = False,
+    ) -> "PanelResponse":
+        from app.fs import FileSystemService, get_fs_service_panels
+
+        fs: FileSystemService = get_fs_service_panels()
+
+        if check_source:
+            in_source_folder = fs.path_exists_on_disk(panel.name)
+
+        return cls(**panel.model_dump(), in_source_folder=in_source_folder)
 
 
 class IngestQuery(SQLModel):

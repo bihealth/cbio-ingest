@@ -74,6 +74,40 @@ class TestFileSystemService:
             result = fs_service_panels.get_ingested_panel("nonexistent.txt")
             assert result is None
 
+    class TestPathExistsOnDisk:
+        """Tests for path_exists_on_disk method."""
+
+        def test_path_exists_on_disk_for_study_directory(
+            self, fs_service_studies: FileSystemService, study_dir: Path
+        ):
+            """Test existing study directory returns True."""
+            (study_dir / "study1").mkdir()
+
+            assert fs_service_studies.path_exists_on_disk("study1") is True
+
+        def test_path_exists_on_disk_for_panel_file(
+            self, fs_service_panels: FileSystemService, panel_dir: Path
+        ):
+            """Test existing panel file returns True."""
+            (panel_dir / "panel1.txt").touch()
+
+            assert fs_service_panels.path_exists_on_disk("panel1.txt") is True
+
+        def test_path_exists_on_disk_returns_false_when_missing(
+            self, fs_service_studies: FileSystemService
+        ):
+            """Test missing path returns False."""
+            assert fs_service_studies.path_exists_on_disk("missing-study") is False
+
+        def test_path_exists_on_disk_returns_false_with_nonexistent_base_path(
+            self, session: Session, tmp_path: Path
+        ):
+            """Test missing base path returns False for any child path."""
+            nonexistent_dir = tmp_path / "missing-base"
+            fs_service = FileSystemService(session=session, base_path=str(nonexistent_dir))
+
+            assert fs_service.path_exists_on_disk("anything") is False
+
     class TestListStudies:
         """Tests for list_studies method."""
 
