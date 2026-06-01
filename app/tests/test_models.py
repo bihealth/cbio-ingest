@@ -175,54 +175,36 @@ class TestIngestQuery:
 class TestResponseAugment:
     """Tests for StudyResponse/PanelResponse augment helpers."""
 
-    def test_study_augment_uses_explicit_in_source_folder_when_not_checking_source(
-        self,
-    ):
-        """Test explicit in_source_folder is preserved when check_source is False."""
+    def test_study_augment_uses_explicit_in_source_folder(self):
+        """Test explicit in_source_folder is preserved."""
         study = Study(name="study-a", status=Status.INITIAL)
 
-        response = StudyResponse.augment(study, in_source_folder=True, check_source=False)
+        response = StudyResponse.augment(study, in_source_folder=True)
 
         assert response.name == "study-a"
         assert response.in_source_folder is True
 
-    def test_study_augment_check_source_overrides_in_source_folder(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
-        """Test check_source=True computes in_source_folder from filesystem service."""
+    def test_study_augment_defaults_in_source_folder_to_false(self):
+        """Test in_source_folder defaults to False when omitted."""
+        study = Study(name="study-default", status=Status.INITIAL)
 
-        class StubFS:
-            def path_exists_on_disk(self, name: str) -> bool:
-                return name == "study-exists"
+        response = StudyResponse.augment(study)
 
-        monkeypatch.setattr("app.fs.get_fs_service_studies", lambda: StubFS())
-        study = Study(name="study-exists", status=Status.INITIAL)
+        assert response.in_source_folder is False
 
-        response = StudyResponse.augment(study, in_source_folder=False, check_source=True)
-
-        assert response.in_source_folder is True
-
-    def test_panel_augment_uses_explicit_in_source_folder_when_not_checking_source(self):
-        """Test explicit in_source_folder is preserved when check_source is False."""
+    def test_panel_augment_uses_explicit_in_source_folder(self):
+        """Test explicit in_source_folder is preserved."""
         panel = Panel(name="panel-a.txt", status=Status.INITIAL)
 
-        response = PanelResponse.augment(panel, in_source_folder=False, check_source=False)
+        response = PanelResponse.augment(panel, in_source_folder=False)
 
         assert response.name == "panel-a.txt"
         assert response.in_source_folder is False
 
-    def test_panel_augment_check_source_overrides_in_source_folder(
-        self, monkeypatch: pytest.MonkeyPatch
-    ):
-        """Test check_source=True computes in_source_folder from filesystem service."""
+    def test_panel_augment_defaults_in_source_folder_to_false(self):
+        """Test in_source_folder defaults to False when omitted."""
+        panel = Panel(name="panel-default.txt", status=Status.INITIAL)
 
-        class StubFS:
-            def path_exists_on_disk(self, name: str) -> bool:
-                return name == "panel-present.txt"
-
-        monkeypatch.setattr("app.fs.get_fs_service_panels", lambda: StubFS())
-        panel = Panel(name="panel-missing.txt", status=Status.INITIAL)
-
-        response = PanelResponse.augment(panel, in_source_folder=True, check_source=True)
+        response = PanelResponse.augment(panel)
 
         assert response.in_source_folder is False

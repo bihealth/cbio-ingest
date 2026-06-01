@@ -35,7 +35,9 @@ async def list_panels(
         fs_panels = fs.list_panels()
         fs_names = {s.name for s in fs_panels}
         db_only = [
-            PanelResponse.augment(panel) for panel in db_panels if panel.name not in fs_names
+            PanelResponse.augment(panel, in_source_folder=False)
+            for panel in db_panels
+            if panel.name not in fs_names
         ]
         return fs_panels + db_only
 
@@ -99,7 +101,7 @@ async def create_panel(
     session.commit()
     session.refresh(panel)
 
-    return PanelResponse.augment(panel, check_source=True)
+    return PanelResponse.augment(panel, in_source_folder=fs.path_exists_on_disk(panel.name))
 
 
 @router.get("/{panel_id}", responses={404: {"description": "Not Found"}})
@@ -119,7 +121,7 @@ async def get_panel(
     if not panel:
         raise HTTPException(status_code=404, detail="Panel not found")
 
-    return PanelResponse.augment(panel, check_source=True)
+    return PanelResponse.augment(panel, in_source_folder=fs.path_exists_on_disk(panel.name))
 
 
 @router.delete("/{panel_id}", responses={404: {"description": "Not Found"}})

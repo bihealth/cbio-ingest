@@ -35,11 +35,16 @@ async def list_studies(
         fs_studies = fs.list_studies()
         fs_names = {s.name for s in fs_studies}
         db_only = [
-            StudyResponse.augment(study) for study in db_studies if study.name not in fs_names
+            StudyResponse.augment(study, in_source_folder=False)
+            for study in db_studies
+            if study.name not in fs_names
         ]
         return fs_studies + db_only
 
-    return [StudyResponse.augment(study) for study in session.exec(select(Study)).all()]
+    return [
+        StudyResponse.augment(study, in_source_folder=fs.path_exists_on_disk(study.name))
+        for study in session.exec(select(Study)).all()
+    ]
 
 
 @router.post(
@@ -99,13 +104,14 @@ async def create_study(
     session.commit()
     session.refresh(study)
 
-    return StudyResponse.augment(study, check_source=True)
+    return StudyResponse.augment(study, in_source_folder=fs.path_exists_on_disk(study.name))
 
 
 @router.get("/{study_id}", responses={404: {"description": "Not Found"}})
 async def get_study(
     study_id: int,
     session: Session = Depends(get_session),
+    fs: FileSystemService = Depends(get_fs_service_studies),
     token=Depends(verify_token),
 ) -> StudyResponse:
     """Fetch a single study by ID."""
@@ -118,7 +124,7 @@ async def get_study(
     if not study:
         raise HTTPException(status_code=404, detail="Study not found")
 
-    return StudyResponse.augment(study, check_source=True)
+    return StudyResponse.augment(study, in_source_folder=fs.path_exists_on_disk(study.name))
 
 
 @router.delete("/{study_id}", responses={404: {"description": "Not Found"}})

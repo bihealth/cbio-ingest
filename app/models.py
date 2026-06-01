@@ -47,13 +47,7 @@ class StudyResponse(StudyPanelBase):
         cls,
         study: Study,
         in_source_folder: bool = False,
-        check_source: bool = False,
     ) -> "StudyResponse":
-        if check_source:
-            from app.fs import get_fs_service_studies
-
-            fs = get_fs_service_studies()
-            in_source_folder = fs.path_exists_on_disk(study.name)
         return cls(**study.model_dump(), in_source_folder=in_source_folder)
 
 
@@ -74,13 +68,7 @@ class PanelResponse(StudyPanelBase):
         cls,
         panel: Panel,
         in_source_folder: bool = False,
-        check_source: bool = False,
     ) -> "PanelResponse":
-        if check_source:
-            from app.fs import get_fs_service_panels
-
-            fs = get_fs_service_panels()
-            in_source_folder = fs.path_exists_on_disk(panel.name)
         return cls(**panel.model_dump(), in_source_folder=in_source_folder)
 
 
