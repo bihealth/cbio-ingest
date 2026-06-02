@@ -16,7 +16,7 @@ jobs:
       - uses: ./.github/actions/setup-python-uv
 
       - name: Check commit messages
-      - run: cz check --rev-range origin/main..HEAD
+        run: cz check --rev-range origin/main..HEAD
 
   lint:
     runs-on: ubuntu-latest
