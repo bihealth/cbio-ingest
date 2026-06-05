@@ -1,0 +1,26 @@
+name: PR Title Check
+
+on:
+  pull_request:
+    branches: ["main", "maintenance/dependencies"]
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Validate PR title
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+
+          echo "Checking: $TITLE"
+
+          if ! echo "$TITLE" | grep -Eq '^(build|bump|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([^)]+\))?!?: .+$'; then
+            echo "Invalid PR title"
+            exit 1
+          fi

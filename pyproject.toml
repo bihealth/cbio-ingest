@@ -42,6 +42,13 @@ project-includes = [
     "**/*.ipynb",
 ]
 
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+version_files = [
+    "pyproject.toml"
+]
+
 [dependency-groups]
 dev = [
     "ruff>=0.15.11",
@@ -52,4 +59,5 @@ dev = [
     "schemathesis>=4.17.0",
     "openapi-spec-validator>=0.7.1",
     "pyrefly>=1.0.0",
+    "python-semantic-release>=9.21.1",
 ]
