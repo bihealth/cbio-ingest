@@ -2,8 +2,12 @@ name: PR Title Check
 
 on:
   pull_request:
-    branches: ["**"]
+    branches: ["main", "maintenance/dependencies"]
     types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   title:
