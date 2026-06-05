@@ -1,6 +1,6 @@
 [project]
 name = "cbio-ingest"
-version = "0.1.0"
+version = "0.1.1"
 description = "REST API for ingesting data into cBioPortal"
 readme = "README.md"
 requires-python = ">=3.12"
