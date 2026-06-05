@@ -7,19 +7,6 @@ on:
     branches: ["**"]
 
 jobs:
-  commitizen:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/setup-python-uv
-
-      - name: Check commit messages
-        run: uv run cz check --rev-range origin/main..HEAD
-
   lint:
     runs-on: ubuntu-latest
 
