@@ -6,13 +6,15 @@ import pytest
 from rq.timeouts import JobTimeoutException
 from sqlmodel import Session
 
-from app.models import LogLevel, Panel, Status, Study
+from app.models import LogLevel, Panel, Status, Study, Validation
 from app.tasks import (
     ingest_panel,
     ingest_study,
     mark_completed,
+    mark_completed_with_warnings,
     mark_failed,
     mark_in_progress,
+    validate_study,
 )
 
 
@@ -32,7 +34,7 @@ class TestMarkInProgress:
         assert len(study.logs) == 1
         assert study.logs[0]["level"] == LogLevel.INFO
         assert study.logs[0]["reporter"] == "worker"
-        assert "Ingestion started" in study.logs[0]["message"]
+        assert "Task started." in study.logs[0]["message"]
 
     def test_mark_panel_in_progress(self, session: Session):
         """Test marking a panel as in progress."""
@@ -64,7 +66,7 @@ class TestMarkCompleted:
         assert len(study.logs) == 1
         assert study.logs[0]["level"] == LogLevel.INFO
         assert study.logs[0]["reporter"] == "worker"
-        assert "Ingestion completed" in study.logs[0]["message"]
+        assert "Task completed." in study.logs[0]["message"]
 
     def test_mark_panel_completed(self, session: Session):
         """Test marking a panel as completed."""
@@ -157,7 +159,7 @@ class TestIngestStudy:
         assert study.status == Status.COMPLETED
         assert study.command is not None
         assert study.cbioportal_version == "cbioportal:5.0.0"
-        assert study.date_ingested is not None
+        assert study.date is not None
 
     @patch("app.tasks.Session")
     def test_ingest_study_not_found(self, mock_session_class: Mock):
@@ -305,7 +307,7 @@ class TestIngestPanel:
         assert panel.status == Status.COMPLETED
         assert panel.command is not None
         assert panel.cbioportal_version == "cbioportal:5.0.0"
-        assert panel.date_ingested is not None
+        assert panel.date is not None
 
     @patch("app.tasks.Session")
     def test_ingest_panel_not_found(self, mock_session_class: Mock):
@@ -388,4 +390,184 @@ class TestIngestPanel:
 
         assert panel.status == Status.FAILED
         assert "maximum timeout" in panel.logs[-1]["message"]
+        session.rollback.assert_called_once()
+
+
+class TestMarkCompletedWithWarnings:
+    """Tests for mark_completed_with_warnings function."""
+
+    def test_mark_study_completed_with_warnings(self, session: Session):
+        """Test marking a study as completed with warnings."""
+        study = Study(name="test-study", status=Status.IN_PROGRESS)
+        session.add(study)
+        session.commit()
+        session.refresh(study)
+
+        mark_completed_with_warnings(study, session)
+
+        assert study.status == Status.COMPLETED
+        assert study.date is not None
+        assert len(study.logs) == 1
+        assert study.logs[0]["level"] == LogLevel.WARNING
+        assert study.logs[0]["reporter"] == "worker"
+        assert "warnings" in study.logs[0]["message"]
+
+    def test_mark_validation_completed_with_warnings(self, session: Session):
+        """Test marking a validation as completed with warnings."""
+        validation = Validation(name="test-study", status=Status.IN_PROGRESS)
+        session.add(validation)
+        session.commit()
+        session.refresh(validation)
+
+        mark_completed_with_warnings(validation, session)
+
+        assert validation.status == Status.COMPLETED
+        assert validation.date is not None
+        assert len(validation.logs) == 1
+        assert validation.logs[0]["level"] == LogLevel.WARNING
+
+
+class TestValidateStudy:
+    """Tests for validate_study function."""
+
+    @patch("app.tasks.docker")
+    @patch("app.tasks.Session")
+    def test_validate_study_success(self, mock_session_class: Mock, mock_docker: Mock):
+        """Test successful study validation (exit code 0)."""
+        session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = session
+
+        validation = Validation(id=1, name="test-study", study_id=1, status=Status.INITIAL)
+        session.get.return_value = validation
+
+        mock_client = MagicMock()
+        mock_docker.from_env.return_value = mock_client
+
+        mock_container = MagicMock()
+        mock_client.containers.get.return_value = mock_container
+
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-validation"}
+        mock_client.api.exec_start.return_value = iter([b"Validation succeeded\n"])
+        mock_client.api.exec_inspect.return_value = {"ExitCode": 0}
+        mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
+
+        with patch.dict("os.environ", {"CBIOPORTAL_CONTAINER_NAME": "test-container"}):
+            validate_study(1)
+
+        mock_client.api.exec_create.assert_called_once()
+        # No container restart for validations
+        mock_container.restart.assert_not_called()
+
+        assert validation.status == Status.COMPLETED
+        assert validation.command is not None
+        assert validation.cbioportal_version == "cbioportal:5.0.0"
+        assert validation.date is not None
+
+    @patch("app.tasks.docker")
+    @patch("app.tasks.Session")
+    def test_validate_study_completed_with_warnings(
+        self, mock_session_class: Mock, mock_docker: Mock
+    ):
+        """Test study validation completing with warnings (exit code 3)."""
+        session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = session
+
+        validation = Validation(id=1, name="test-study", study_id=1, status=Status.INITIAL)
+        session.get.return_value = validation
+
+        mock_client = MagicMock()
+        mock_docker.from_env.return_value = mock_client
+
+        mock_container = MagicMock()
+        mock_client.containers.get.return_value = mock_container
+
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-validation-warn"}
+        mock_client.api.exec_start.return_value = iter([b"Validation completed with warnings\n"])
+        mock_client.api.exec_inspect.return_value = {"ExitCode": 3}
+        mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
+
+        validate_study(1)
+
+        assert validation.status == Status.COMPLETED
+        assert validation.logs[-1]["level"] == LogLevel.WARNING
+
+    @patch("app.tasks.docker")
+    @patch("app.tasks.Session")
+    def test_validate_study_failure(self, mock_session_class: Mock, mock_docker: Mock):
+        """Test study validation with a non-zero, non-warning exit code."""
+        session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = session
+
+        validation = Validation(id=1, name="test-study", study_id=1, status=Status.INITIAL)
+        session.get.return_value = validation
+
+        mock_client = MagicMock()
+        mock_docker.from_env.return_value = mock_client
+
+        mock_container = MagicMock()
+        mock_client.containers.get.return_value = mock_container
+
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-validation-fail"}
+        mock_client.api.exec_start.return_value = iter([b"Validation error\n"])
+        mock_client.api.exec_inspect.return_value = {"ExitCode": 1}
+        mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
+
+        validate_study(1)
+
+        assert validation.status == Status.FAILED
+        assert "exit code 1" in validation.logs[-1]["message"]
+
+    @patch("app.tasks.Session")
+    def test_validate_study_not_found(self, mock_session_class: Mock):
+        """Test validating a non-existent validation record."""
+        session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = session
+        session.get.return_value = None
+
+        with pytest.raises(ValueError, match="Validation with ID 999 not found"):
+            validate_study(999)
+
+    @patch("app.tasks.docker")
+    @patch("app.tasks.Session")
+    def test_validate_study_invalid_name(self, mock_session_class: Mock, mock_docker: Mock):
+        """Test study validation with an invalid folder name."""
+        session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = session
+
+        validation = Validation(id=1, name="../malicious", study_id=1, status=Status.INITIAL)
+        session.get.return_value = validation
+
+        mock_client = MagicMock()
+        mock_docker.from_env.return_value = mock_client
+
+        with pytest.raises(Exception):
+            validate_study(1)
+
+        assert validation.status == Status.FAILED
+
+    @patch("app.tasks.docker")
+    @patch("app.tasks.Session")
+    def test_validate_study_timeout(self, mock_session_class: Mock, mock_docker: Mock):
+        """Test study validation when the job timeout is exceeded."""
+        session = MagicMock()
+        mock_session_class.return_value.__enter__.return_value = session
+
+        validation = Validation(id=1, name="test-study", study_id=1, status=Status.INITIAL)
+        session.get.return_value = validation
+
+        mock_client = MagicMock()
+        mock_docker.from_env.return_value = mock_client
+
+        mock_container = MagicMock()
+        mock_client.containers.get.return_value = mock_container
+        mock_client.api.exec_create.return_value = {"Id": "exec-id-validation-timeout"}
+        mock_client.api.exec_start.side_effect = JobTimeoutException(
+            "Task exceeded maximum timeout value (43200 seconds)"
+        )
+
+        with pytest.raises(JobTimeoutException):
+            validate_study(1)
+
+        assert validation.status == Status.FAILED
+        assert "maximum timeout" in validation.logs[-1]["message"]
         session.rollback.assert_called_once()

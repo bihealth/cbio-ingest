@@ -18,46 +18,50 @@ class LogLevel(str, Enum):
     ERROR = "ERROR"
 
 
-class StudyPanelBase(SQLModel):
-    """Base class for ingested entities."""
+class Task(SQLModel):
+    """Base class for task entities."""
 
     name: str
     status: Status = Field(default=Status.INITIAL)
-    date_ingested: Optional[datetime] = Field(default=None)
+    date: Optional[datetime] = Field(default=None)
     logs: List[Dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
     job_id: Optional[str] = None
     command: Optional[str] = None
     cbioportal_version: Optional[str] = None
 
 
-class Study(StudyPanelBase, table=True):
+class Study(Task, table=True):
     """Study ingestion result."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
-class StudyResponse(StudyPanelBase):
+class StudyResponse(Task):
     """Study response model with additional fields for API responses."""
 
     id: Optional[int]
     in_source_folder: bool
+    validation_id: Optional[int] = None
 
     @classmethod
     def augment(
         cls,
         study: Study,
         in_source_folder: bool = False,
+        validation_id: Optional[int] = None,
     ) -> "StudyResponse":
-        return cls(**study.model_dump(), in_source_folder=in_source_folder)
+        return cls(
+            **study.model_dump(), in_source_folder=in_source_folder, validation_id=validation_id
+        )
 
 
-class Panel(StudyPanelBase, table=True):
+class Panel(Task, table=True):
     """Panel ingestion result."""
 
     id: Optional[int] = Field(default=None, primary_key=True)
 
 
-class PanelResponse(StudyPanelBase):
+class PanelResponse(Task):
     """Panel response model with additional fields for API responses."""
 
     id: Optional[int]
@@ -72,7 +76,38 @@ class PanelResponse(StudyPanelBase):
         return cls(**panel.model_dump(), in_source_folder=in_source_folder)
 
 
-class IngestQuery(SQLModel):
+class Validation(Task, table=True):
+    """Study validation result."""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    study_id: Optional[int] = Field(default=None, foreign_key="study.id")
+
+    @property
+    def report(self) -> str:
+        return f"{self.name}.html"
+
+
+class ValidationResponse(Task):
+    """Validation response model with additional fields for API responses."""
+
+    id: Optional[int]
+    study_id: Optional[int]
+
+    @classmethod
+    def augment(
+        cls,
+        validation: Validation,
+    ) -> "ValidationResponse":
+        return cls(**validation.model_dump())
+
+
+class TaskInput(SQLModel):
     """Query model for panel or study ingestion."""
 
     name: str
+
+
+class DeletionResponse(SQLModel):
+    """Response model for deletion endpoints."""
+
+    message: str

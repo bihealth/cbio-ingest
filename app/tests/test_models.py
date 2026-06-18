@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import attributes
 from sqlmodel import Session
 
-from app.models import IngestQuery, LogLevel, Panel, PanelResponse, Status, Study, StudyResponse
+from app.models import LogLevel, Panel, PanelResponse, Status, Study, StudyResponse, TaskInput
 
 
 class TestStatus:
@@ -44,7 +44,7 @@ class TestStudy:
         assert study.id is not None
         assert study.name == "test-study"
         assert study.status == Status.INITIAL
-        assert study.date_ingested is None
+        assert study.date is None
         assert study.logs == []
         assert study.job_id is None
         assert study.command is None
@@ -57,7 +57,7 @@ class TestStudy:
         study = Study(
             name="custom-study",
             status=Status.COMPLETED,
-            date_ingested=now,
+            date=now,
             logs=logs,
             job_id="job-123",
             command="test-command",
@@ -70,7 +70,7 @@ class TestStudy:
         assert study.id is not None
         assert study.name == "custom-study"
         assert study.status == Status.COMPLETED
-        assert study.date_ingested == now
+        assert study.date == now
         assert study.logs == logs
         assert study.job_id == "job-123"
         assert study.command == "test-command"
@@ -106,7 +106,7 @@ class TestPanel:
         assert panel.id is not None
         assert panel.name == "test-panel"
         assert panel.status == Status.INITIAL
-        assert panel.date_ingested is None
+        assert panel.date is None
         assert panel.logs == []
         assert panel.job_id is None
         assert panel.command is None
@@ -119,7 +119,7 @@ class TestPanel:
         panel = Panel(
             name="custom-panel",
             status=Status.FAILED,
-            date_ingested=now,
+            date=now,
             logs=logs,
             job_id="job-789",
             command="test-command-2",
@@ -132,7 +132,7 @@ class TestPanel:
         assert panel.id is not None
         assert panel.name == "custom-panel"
         assert panel.status == Status.FAILED
-        assert panel.date_ingested == now
+        assert panel.date == now
         assert panel.logs == logs
         assert panel.job_id == "job-789"
         assert panel.command == "test-command-2"
@@ -157,19 +157,19 @@ class TestPanel:
         assert panel.logs[0]["message"] == "Panel ingested"
 
 
-class TestIngestQuery:
-    """Tests for IngestQuery model."""
+class TestTaskInput:
+    """Tests for TaskInput model."""
 
     def test_create_ingest_query(self):
         """Test creating an ingest query."""
-        query = IngestQuery(name="test-item")
+        query = TaskInput(name="test-item")
         assert query.name == "test-item"
 
     def test_ingest_query_validation(self):
-        """Test that IngestQuery requires a name."""
+        """Test that TaskInput requires a name."""
         with pytest.raises(ValidationError):
             # pyrefly: ignore [missing-argument]
-            IngestQuery()  # pyright: ignore[reportCallIssue]
+            TaskInput()  # pyright: ignore[reportCallIssue]
 
 
 class TestResponseAugment:

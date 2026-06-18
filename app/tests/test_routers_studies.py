@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Panel, Status, Study
+from app.models import Panel, Status, Study, Validation
 
 
 class TestStudiesRouter:
@@ -245,69 +245,8 @@ class TestStudiesRouter:
             data = response.json()
             assert data["name"] == "failed-study"
             assert data["job_id"] == "job-456"
+            assert data["logs"] == []
             assert mock_queue.enqueue.called
-
-        @patch("app.routers.studies.queue")
-        def test_create_study_retry_failed_purges_logs_by_default(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that retrying a failed study purges logs by default."""
-            study = Study(
-                name="failed-study-logs",
-                status=Status.FAILED,
-                logs=[{"level": "ERROR", "message": "previous error"}],
-            )
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-789"
-            mock_queue.enqueue.return_value = mock_job
-            TestStudiesRouter._create_study_source("failed-study-logs")
-
-            response = client.post(
-                "/studies/",
-                json={"name": "failed-study-logs"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert response.json()["logs"] == []
-
-        @patch("app.routers.studies.queue")
-        def test_create_study_retry_failed_keep_logs(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that retrying a failed study preserves logs when keep_logs=true."""
-            study = Study(
-                name="failed-study-keeplogs",
-                status=Status.FAILED,
-                logs=[{"level": "ERROR", "message": "previous error"}],
-            )
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-789"
-            mock_queue.enqueue.return_value = mock_job
-            TestStudiesRouter._create_study_source("failed-study-keeplogs")
-
-            response = client.post(
-                "/studies/?keep_logs=true",
-                json={"name": "failed-study-keeplogs"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert len(response.json()["logs"]) == 1
 
         @patch("app.routers.studies.queue")
         def test_create_study_force_completed(
@@ -336,69 +275,8 @@ class TestStudiesRouter:
             data = response.json()
             assert data["name"] == "completed-study-force"
             assert data["job_id"] == "job-force"
+            assert data["logs"] == []
             assert mock_queue.enqueue.called
-
-        @patch("app.routers.studies.queue")
-        def test_create_study_force_completed_purges_logs_by_default(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that force re-ingesting a completed study purges logs by default."""
-            study = Study(
-                name="completed-study-force-logs",
-                status=Status.COMPLETED,
-                logs=[{"level": "INFO", "message": "previous success"}],
-            )
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-force-logs"
-            mock_queue.enqueue.return_value = mock_job
-            TestStudiesRouter._create_study_source("completed-study-force-logs")
-
-            response = client.post(
-                "/studies/?force=true",
-                json={"name": "completed-study-force-logs"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert response.json()["logs"] == []
-
-        @patch("app.routers.studies.queue")
-        def test_create_study_force_completed_keep_logs(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that force re-ingesting a completed study preserves logs when keep_logs=true."""
-            study = Study(
-                name="completed-study-force-keeplogs",
-                status=Status.COMPLETED,
-                logs=[{"level": "INFO", "message": "previous success"}],
-            )
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-force-keeplogs"
-            mock_queue.enqueue.return_value = mock_job
-            TestStudiesRouter._create_study_source("completed-study-force-keeplogs")
-
-            response = client.post(
-                "/studies/?force=true&keep_logs=true",
-                json={"name": "completed-study-force-keeplogs"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert len(response.json()["logs"]) == 1
 
         @patch("app.routers.studies.queue")
         def test_create_study_conflict_when_another_study_in_progress(
@@ -504,6 +382,63 @@ class TestStudiesRouter:
         def test_get_study_unauthorized(self, client: TestClient):
             """Test fetching a study without authentication."""
             response = client.get("/studies/1")
+            assert response.status_code == 401
+
+    class TestGetStudyValidation:
+        """Tests for GET /studies/{study_id}/validation endpoint."""
+
+        def test_get_study_validation_by_study_name_success(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test fetching a validation by study ID."""
+            study = Study(name="study-validation", status=Status.COMPLETED)
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            validation = Validation(
+                name="study-validation.html",
+                study_id=study.id,
+                status=Status.IN_PROGRESS,
+                job_id="validation-job-123",
+            )
+            session.add(validation)
+            session.commit()
+            session.refresh(validation)
+
+            response = client.get(f"/studies/{study.id}/validation", headers=auth_headers)
+            assert response.status_code == 200
+            data = response.json()
+            assert data["id"] == validation.id
+            assert data["name"] == "study-validation.html"
+            assert data["study_id"] == study.id
+            assert data["status"] == "in_progress"
+            assert data["job_id"] == "validation-job-123"
+
+        def test_get_study_validation_by_study_name_not_found_when_missing_validation(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test fetching validation for a study without a validation record."""
+            study = Study(name="study-no-validation", status=Status.COMPLETED)
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            response = client.get(f"/studies/{study.id}/validation", headers=auth_headers)
+            assert response.status_code == 404
+            assert response.json()["detail"] == "Validation not found"
+
+        def test_get_study_validation_by_study_name_not_found_when_study_missing(
+            self, client: TestClient, auth_headers: dict[str, str]
+        ):
+            """Test fetching validation for a missing study."""
+            response = client.get("/studies/9999/validation", headers=auth_headers)
+            assert response.status_code == 404
+            assert response.json()["detail"] == "Study not found"
+
+        def test_get_study_validation_by_study_name_unauthorized(self, client: TestClient):
+            """Test fetching a study validation without authentication."""
+            response = client.get("/studies/1/validation")
             assert response.status_code == 401
 
     class TestDeleteStudy:

@@ -37,7 +37,7 @@ class TestFileSystemService:
         return FileSystemService(session=session, base_path=str(panel_dir))
 
     class TestGetIngestedStudy:
-        """Tests for get_ingested_study method."""
+        """Tests for get_study method."""
 
         def test_get_existing_study(self, fs_service_studies: FileSystemService, session: Session):
             """Test getting an existing study from database."""
@@ -45,18 +45,18 @@ class TestFileSystemService:
             session.add(study)
             session.commit()
 
-            result = fs_service_studies.get_ingested_study("test-study")
+            result = fs_service_studies.get_study("test-study")
             assert result is not None
             assert result.name == "test-study"
             assert result.status == Status.COMPLETED
 
         def test_get_nonexistent_study(self, fs_service_studies: FileSystemService):
             """Test getting a non-existent study returns None."""
-            result = fs_service_studies.get_ingested_study("nonexistent")
+            result = fs_service_studies.get_study("nonexistent")
             assert result is None
 
     class TestGetIngestedPanel:
-        """Tests for get_ingested_panel method."""
+        """Tests for get_panel method."""
 
         def test_get_existing_panel(self, fs_service_panels: FileSystemService, session: Session):
             """Test getting an existing panel from database."""
@@ -64,14 +64,14 @@ class TestFileSystemService:
             session.add(panel)
             session.commit()
 
-            result = fs_service_panels.get_ingested_panel("test-panel.txt")
+            result = fs_service_panels.get_panel("test-panel.txt")
             assert result is not None
             assert result.name == "test-panel.txt"
             assert result.status == Status.IN_PROGRESS
 
         def test_get_nonexistent_panel(self, fs_service_panels: FileSystemService):
             """Test getting a non-existent panel returns None."""
-            result = fs_service_panels.get_ingested_panel("nonexistent.txt")
+            result = fs_service_panels.get_panel("nonexistent.txt")
             assert result is None
 
     class TestPathExistsOnDisk:

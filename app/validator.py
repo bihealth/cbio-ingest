@@ -62,3 +62,8 @@ class Validator:
             )
 
         return ValidFileName(name)
+
+
+def get_validator() -> Validator:
+    """Dependency to get validator service instance."""
+    return Validator()

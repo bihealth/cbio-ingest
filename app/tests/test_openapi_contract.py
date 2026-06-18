@@ -61,6 +61,7 @@ class TestOpenAPISpec:
             "/",
             "/studies/",
             "/studies/{study_id}",
+            "/studies/{study_id}/validation",
             "/panels/",
             "/panels/{panel_id}",
         ]
@@ -79,6 +80,7 @@ class TestOpenAPISpec:
             ("/studies/", "get"),
             ("/studies/", "post"),
             ("/studies/{study_id}", "delete"),
+            ("/studies/{study_id}/validation", "get"),
             ("/panels/", "get"),
             ("/panels/", "post"),
             ("/panels/{panel_id}", "delete"),
@@ -95,7 +97,7 @@ class TestOpenAPISpec:
 
         schemas = spec.get("components", {}).get("schemas", {})
 
-        expected_schemas = ["StudyResponse", "PanelResponse", "IngestQuery"]
+        expected_schemas = ["StudyResponse", "PanelResponse", "TaskInput", "Validation"]
 
         for schema_name in expected_schemas:
             assert schema_name in schemas, f"Schema {schema_name} not found in OpenAPI spec"
@@ -113,7 +115,7 @@ class TestOpenAPISpec:
         expected_fields = [
             "name",
             "status",
-            "date_ingested",
+            "date",
             "logs",
             "job_id",
             "command",
@@ -138,7 +140,7 @@ class TestOpenAPISpec:
         expected_fields = [
             "name",
             "status",
-            "date_ingested",
+            "date",
             "logs",
             "job_id",
             "command",
@@ -149,6 +151,31 @@ class TestOpenAPISpec:
 
         for field in expected_fields:
             assert field in props, f"Field {field} not in Panel schema"
+
+    def test_openapi_validation_schema_structure(self, client: TestClient):
+        """Test that Validation schema has correct structure."""
+        response = client.get("/openapi.json")
+        spec = response.json()
+
+        validation_schema = spec["components"]["schemas"]["Validation"]
+
+        assert "properties" in validation_schema
+        props = validation_schema["properties"]
+
+        expected_fields = [
+            "name",
+            "status",
+            "date",
+            "logs",
+            "job_id",
+            "command",
+            "cbioportal_version",
+            "id",
+            "study_id",
+        ]
+
+        for field in expected_fields:
+            assert field in props, f"Field {field} not in Validation schema"
 
     def test_status_enum_schema_matches_model(self, client: TestClient):
         """Test that Status enum in schema matches the actual Status enum."""
