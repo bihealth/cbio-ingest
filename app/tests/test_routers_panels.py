@@ -399,7 +399,7 @@ class TestPanelsRouter:
 
             response = client.delete(f"/panels/{panel.id}", headers=auth_headers)
             assert response.status_code == 200
-            assert response.json()["message"] == "Panel deleted successfully"
+            assert response.json()["message"] == f"Panel with ID {panel.id} deleted successfully"
 
             # Verify panel is deleted
             deleted_panel = session.get(Panel, panel.id)

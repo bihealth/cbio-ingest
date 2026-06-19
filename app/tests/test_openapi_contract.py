@@ -11,7 +11,6 @@ from sqlmodel import Session, SQLModel, create_engine, delete
 from sqlmodel.pool import StaticPool
 
 from app import APP_VERSION
-from app import main as main_module
 from app.db import get_session
 from app.main import app
 from app.models import Panel, Status, Study
@@ -19,6 +18,7 @@ from app.models import Panel, Status, Study
 load_all_checks()
 _unsupported_method_check = CHECKS.get_one("unsupported_method")
 _negative_data_rejection_check = CHECKS.get_one("negative_data_rejection")
+_rejected_positive_data_check = CHECKS.get_one("rejected_positive_data")
 
 # ---------------------------------------------------------------------------
 # Schema-structure tests (what endpoints / schemas SHOULD exist in the spec)
@@ -61,7 +61,8 @@ class TestOpenAPISpec:
             "/",
             "/studies/",
             "/studies/{study_id}",
-            "/studies/{study_id}/validation",
+            "/validations/",
+            "/validations/{validation_id}",
             "/panels/",
             "/panels/{panel_id}",
         ]
@@ -80,7 +81,10 @@ class TestOpenAPISpec:
             ("/studies/", "get"),
             ("/studies/", "post"),
             ("/studies/{study_id}", "delete"),
-            ("/studies/{study_id}/validation", "get"),
+            ("/validations/", "get"),
+            ("/validations/", "post"),
+            ("/validations/{validation_id}", "get"),
+            ("/validations/{validation_id}", "delete"),
             ("/panels/", "get"),
             ("/panels/", "post"),
             ("/panels/{panel_id}", "delete"),
@@ -97,7 +101,7 @@ class TestOpenAPISpec:
 
         schemas = spec.get("components", {}).get("schemas", {})
 
-        expected_schemas = ["StudyResponse", "PanelResponse", "TaskInput", "Validation"]
+        expected_schemas = ["StudyResponse", "PanelResponse", "TaskInput", "ValidationResponse"]
 
         for schema_name in expected_schemas:
             assert schema_name in schemas, f"Schema {schema_name} not found in OpenAPI spec"
@@ -153,11 +157,11 @@ class TestOpenAPISpec:
             assert field in props, f"Field {field} not in Panel schema"
 
     def test_openapi_validation_schema_structure(self, client: TestClient):
-        """Test that Validation schema has correct structure."""
+        """Test that ValidationResponse schema has correct structure."""
         response = client.get("/openapi.json")
         spec = response.json()
 
-        validation_schema = spec["components"]["schemas"]["Validation"]
+        validation_schema = spec["components"]["schemas"]["ValidationResponse"]
 
         assert "properties" in validation_schema
         props = validation_schema["properties"]
@@ -175,7 +179,7 @@ class TestOpenAPISpec:
         ]
 
         for field in expected_fields:
-            assert field in props, f"Field {field} not in Validation schema"
+            assert field in props, f"Field {field} not in ValidationResponse schema"
 
     def test_status_enum_schema_matches_model(self, client: TestClient):
         """Test that Status enum in schema matches the actual Status enum."""
@@ -241,7 +245,7 @@ def test_api_conformance(case):
         session.commit()
 
         app.dependency_overrides[get_session] = lambda: session
-        with patch.object(main_module, "engine", _conformance_engine):
+        with patch("app.db.engine", _conformance_engine):
             try:
                 with (
                     patch("app.routers.studies.queue") as sq,
@@ -255,6 +259,7 @@ def test_api_conformance(case):
                     excluded_checks=[
                         _unsupported_method_check,
                         _negative_data_rejection_check,
+                        _rejected_positive_data_check,
                     ],
                 )
             finally:

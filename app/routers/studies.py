@@ -94,6 +94,7 @@ async def create_study(
         raise HTTPException(status_code=400, detail=f"Study name invalid: {e}")
 
     study = db.get_study_by_name(validated_name)
+    validation = db.get_validation_by_name(validated_name)
 
     if study:
         if study.status == Status.COMPLETED and not force:
@@ -121,8 +122,6 @@ async def create_study(
         session.commit()
         session.refresh(study)
 
-        validation = db.get_validation_by_name(validated_name)
-
         if validation:
             validation.study_id = study.id
             session.add(validation)
@@ -146,27 +145,31 @@ async def create_study(
     session.commit()
     session.refresh(study)
 
-    return StudyResponse.augment(study, in_source_folder=fs.study_exists_on_disk(study.name))
+    return StudyResponse.augment(
+        study,
+        in_source_folder=fs.study_exists_on_disk(study.name),
+        validation_id=validation.id if validation else None,
+    )
 
 
 @router.get("/{study_id}", responses={404: {"description": "Not Found"}})
-async def get_study_by_name(
+async def get_study(
     study_id: int,
-    session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service),
+    db: DbHelper = Depends(get_db_helper),
     token=Depends(verify_token),
 ) -> StudyResponse:
     """Fetch a single study by ID."""
-    try:
-        study = session.get(Study, study_id)
-
-    except OverflowError:
-        raise HTTPException(status_code=404, detail="Study not found")
+    study, validation = db.get_study_validation_by_id(study_id)
 
     if not study:
         raise HTTPException(status_code=404, detail="Study not found")
 
-    return StudyResponse.augment(study, in_source_folder=fs.study_exists_on_disk(study.name))
+    return StudyResponse.augment(
+        study,
+        in_source_folder=fs.study_exists_on_disk(study.name),
+        validation_id=validation.id if validation else None,
+    )
 
 
 @router.delete("/{study_id}", responses={404: {"description": "Not Found"}})

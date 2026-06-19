@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Panel, Status, Study, Validation
+from app.models import Panel, Status, Study
 
 
 class TestStudiesRouter:
@@ -384,63 +384,6 @@ class TestStudiesRouter:
             response = client.get("/studies/1")
             assert response.status_code == 401
 
-    class TestGetStudyValidation:
-        """Tests for GET /studies/{study_id}/validation endpoint."""
-
-        def test_get_study_validation_by_study_name_success(
-            self, client: TestClient, auth_headers: dict[str, str], session: Session
-        ):
-            """Test fetching a validation by study ID."""
-            study = Study(name="study-validation", status=Status.COMPLETED)
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            validation = Validation(
-                name="study-validation.html",
-                study_id=study.id,
-                status=Status.IN_PROGRESS,
-                job_id="validation-job-123",
-            )
-            session.add(validation)
-            session.commit()
-            session.refresh(validation)
-
-            response = client.get(f"/studies/{study.id}/validation", headers=auth_headers)
-            assert response.status_code == 200
-            data = response.json()
-            assert data["id"] == validation.id
-            assert data["name"] == "study-validation.html"
-            assert data["study_id"] == study.id
-            assert data["status"] == "in_progress"
-            assert data["job_id"] == "validation-job-123"
-
-        def test_get_study_validation_by_study_name_not_found_when_missing_validation(
-            self, client: TestClient, auth_headers: dict[str, str], session: Session
-        ):
-            """Test fetching validation for a study without a validation record."""
-            study = Study(name="study-no-validation", status=Status.COMPLETED)
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            response = client.get(f"/studies/{study.id}/validation", headers=auth_headers)
-            assert response.status_code == 404
-            assert response.json()["detail"] == "Validation not found"
-
-        def test_get_study_validation_by_study_name_not_found_when_study_missing(
-            self, client: TestClient, auth_headers: dict[str, str]
-        ):
-            """Test fetching validation for a missing study."""
-            response = client.get("/studies/9999/validation", headers=auth_headers)
-            assert response.status_code == 404
-            assert response.json()["detail"] == "Study not found"
-
-        def test_get_study_validation_by_study_name_unauthorized(self, client: TestClient):
-            """Test fetching a study validation without authentication."""
-            response = client.get("/studies/1/validation")
-            assert response.status_code == 401
-
     class TestDeleteStudy:
         """Tests for DELETE /studies/{study_id} endpoint."""
 
@@ -456,7 +399,7 @@ class TestStudiesRouter:
 
             response = client.delete(f"/studies/{study.id}", headers=auth_headers)
             assert response.status_code == 200
-            assert response.json()["message"] == "Study deleted successfully"
+            assert response.json()["message"] == f"Study with ID {study.id} deleted successfully"
 
             # Verify study is deleted
             deleted_study = session.get(Study, study.id)

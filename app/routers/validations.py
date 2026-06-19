@@ -138,7 +138,10 @@ async def delete_study_validation(
     if not validation:
         raise HTTPException(status_code=404, detail="Validation not found")
 
-    fs.move_report_to_trash(validation.report)
+    try:
+        fs.move_report_to_trash(validation.report)
+    except FileNotFoundError:
+        pass
 
     session.delete(validation)
     session.commit()

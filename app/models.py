@@ -88,10 +88,10 @@ class Validation(Task, table=True):
 
 
 class ValidationResponse(Task):
-    """Validation response model with additional fields for API responses."""
+    """Validation response model for API responses."""
 
     id: Optional[int]
-    study_id: Optional[int]
+    study_id: Optional[int] = None
 
     @classmethod
     def augment(
@@ -104,7 +104,7 @@ class ValidationResponse(Task):
 class TaskInput(SQLModel):
     """Query model for panel or study ingestion."""
 
-    name: str
+    name: str = Field(min_length=1)
 
 
 class DeletionResponse(SQLModel):

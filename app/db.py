@@ -61,6 +61,12 @@ class DbHelper:
         stmt = select(Validation).where(Validation.study_id == study_id)
         return self.session.exec(stmt).first()
 
+    def get_study_validation_by_id(self, study_id: int) -> tuple[Study | None, Validation | None]:
+        """Get ingested study and its validation by ID."""
+        stmt = select(Study, Validation).where(Study.id == study_id).outerjoin(Validation)
+        result = self.session.exec(stmt).first()
+        return result if result else (None, None)
+
 
 def get_db_helper(session: Session = Depends(get_session)) -> DbHelper:
     """Dependency to get database helper instance."""

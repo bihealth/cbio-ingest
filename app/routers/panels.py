@@ -25,7 +25,7 @@ async def list_panels(
     fs_names = set(fs.list_panels())
     db_panels = list(session.exec(select(Panel)).all())
     no_db = [
-        PanelResponse.augment(Panel(name=p, status=Status.INITIAL))
+        PanelResponse.augment(Panel(name=p, status=Status.INITIAL), in_source_folder=True)
         for p in fs_names - {p.name for p in db_panels}
     ]
     db_dbfs = [PanelResponse.augment(p, in_source_folder=p.name in fs_names) for p in db_panels]
@@ -49,7 +49,7 @@ async def create_panel(
     """Ingest a panel into cBioPortal."""
 
     try:
-        validated_name = validator.validate_folder_name(data.name)
+        validated_name = validator.validate_file_name(data.name)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Panel name invalid: {e}")
 
@@ -102,7 +102,7 @@ async def create_panel(
 
 
 @router.get("/{panel_id}", responses={404: {"description": "Not Found"}})
-async def get_panel_by_name(
+async def get_panel(
     panel_id: int,
     session: Session = Depends(get_session),
     fs: FileSystemService = Depends(get_fs_service),

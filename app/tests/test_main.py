@@ -37,9 +37,9 @@ class TestLifespan:
     """Tests for application lifespan."""
 
     @pytest.mark.asyncio
-    async def test_lifespan_creates_tables(self):
-        """Test that lifespan context manager creates database tables."""
-        from unittest.mock import MagicMock, patch
+    async def test_lifespan_checks_token(self):
+        """Test that lifespan raises RuntimeError if TOKEN is not set."""
+        from unittest.mock import patch
 
         from fastapi import FastAPI
 
@@ -47,13 +47,12 @@ class TestLifespan:
 
         app = FastAPI()
 
-        # Mock the database engine to verify create_all is called
-        with patch("app.main.engine") as mock_engine:
-            with patch("app.main.SQLModel") as mock_sqlmodel:
-                mock_metadata = MagicMock()
-                mock_sqlmodel.metadata = mock_metadata
+        # When TOKEN is set (which is patched by default in conftest.py)
+        async with lifespan(app):
+            pass
 
-                # Use the lifespan context manager
+        # When TOKEN is empty
+        with patch("app.auth.TOKEN", ""):
+            with pytest.raises(RuntimeError, match="TOKEN environment variable must be set"):
                 async with lifespan(app):
-                    # Verify that create_all was called during startup
-                    mock_metadata.create_all.assert_called_once_with(mock_engine)
+                    pass
