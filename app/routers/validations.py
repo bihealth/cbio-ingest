@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import attributes
 from sqlmodel import Session, select
 
-from app.auth import verify_token
-from app.db import DbHelper, get_db_helper, get_session
-from app.fs import FileSystemService, get_fs_service
+from app.auth import verify_token_dependency
+from app.db import DbHelper, get_async_db_helper, get_async_session
+from app.fs import FileSystemService, get_async_fs_service
 from app.models import (
     DeletionResponse,
     Panel,
@@ -18,15 +18,15 @@ from app.models import (
 )
 from app.scheduler import queue
 from app.tasks import validate_study
-from app.validator import Validator, get_validator
+from app.validator import Validator, get_async_validator
 
 router = APIRouter(responses={401: {"description": "Unauthorized"}})
 
 
 @router.get("/")
 async def list_validations(
-    session: Session = Depends(get_session),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    token=Depends(verify_token_dependency),
 ) -> list[ValidationResponse]:
     """List all validations."""
     return [ValidationResponse.augment(v) for v in session.exec(select(Validation)).all()]
@@ -36,11 +36,11 @@ async def list_validations(
 async def create_validation(
     data: TaskInput,
     force: bool = Query(default=False),
-    session: Session = Depends(get_session),
-    fs: FileSystemService = Depends(get_fs_service),
-    db: DbHelper = Depends(get_db_helper),
-    validator: Validator = Depends(get_validator),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    fs: FileSystemService = Depends(get_async_fs_service),
+    db: DbHelper = Depends(get_async_db_helper),
+    validator: Validator = Depends(get_async_validator),
+    token=Depends(verify_token_dependency),
 ) -> ValidationResponse:
     """Create a validation for a study."""
 
@@ -105,8 +105,8 @@ async def create_validation(
 @router.get("/{validation_id}", responses={404: {"description": "Not Found"}})
 async def get_study_validation(
     validation_id: int,
-    session: Session = Depends(get_session),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    token=Depends(verify_token_dependency),
 ) -> ValidationResponse:
     """Fetch the validation job for a study by study ID."""
     try:
@@ -124,9 +124,9 @@ async def get_study_validation(
 @router.delete("/{validation_id}", responses={404: {"description": "Not Found"}})
 async def delete_study_validation(
     validation_id: int,
-    session: Session = Depends(get_session),
-    fs: FileSystemService = Depends(get_fs_service),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    fs: FileSystemService = Depends(get_async_fs_service),
+    token=Depends(verify_token_dependency),
 ) -> DeletionResponse:
     """Delete a study validation."""
     try:

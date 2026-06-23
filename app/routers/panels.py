@@ -4,22 +4,22 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import attributes
 from sqlmodel import Session, select
 
-from app.auth import verify_token
-from app.db import DbHelper, get_db_helper, get_session
-from app.fs import FileSystemService, get_fs_service
+from app.auth import verify_token_dependency
+from app.db import DbHelper, get_async_db_helper, get_async_session
+from app.fs import FileSystemService, get_async_fs_service
 from app.models import DeletionResponse, Panel, PanelResponse, Status, Study, TaskInput, Validation
 from app.scheduler import queue
 from app.tasks import ingest_panel
-from app.validator import Validator, get_validator
+from app.validator import Validator, get_async_validator
 
 router = APIRouter(responses={401: {"description": "Unauthorized"}})
 
 
 @router.get("/")
 async def list_panels(
-    session: Session = Depends(get_session),
-    fs: FileSystemService = Depends(get_fs_service),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    fs: FileSystemService = Depends(get_async_fs_service),
+    token=Depends(verify_token_dependency),
 ) -> list[PanelResponse]:
     """List all ingested panels."""
     fs_names = set(fs.list_panels())
@@ -40,11 +40,11 @@ async def list_panels(
 async def create_panel(
     data: TaskInput,
     force: bool = Query(default=False),
-    session: Session = Depends(get_session),
-    fs: FileSystemService = Depends(get_fs_service),
-    db: DbHelper = Depends(get_db_helper),
-    validator: Validator = Depends(get_validator),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    fs: FileSystemService = Depends(get_async_fs_service),
+    db: DbHelper = Depends(get_async_db_helper),
+    validator: Validator = Depends(get_async_validator),
+    token=Depends(verify_token_dependency),
 ) -> PanelResponse:
     """Ingest a panel into cBioPortal."""
 
@@ -104,9 +104,9 @@ async def create_panel(
 @router.get("/{panel_id}", responses={404: {"description": "Not Found"}})
 async def get_panel(
     panel_id: int,
-    session: Session = Depends(get_session),
-    fs: FileSystemService = Depends(get_fs_service),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    fs: FileSystemService = Depends(get_async_fs_service),
+    token=Depends(verify_token_dependency),
 ) -> PanelResponse:
     """Fetch a single panel by ID."""
     try:
@@ -124,8 +124,8 @@ async def get_panel(
 @router.delete("/{panel_id}", responses={404: {"description": "Not Found"}})
 async def delete_panel(
     panel_id: int,
-    session: Session = Depends(get_session),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    token=Depends(verify_token_dependency),
 ) -> DeletionResponse:
     """Delete a panel from cBioPortal."""
     try:

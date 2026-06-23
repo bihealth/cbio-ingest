@@ -70,3 +70,8 @@ class FileSystemService:
 def get_fs_service() -> FileSystemService:
     """Dependency to get filesystem service instance."""
     return FileSystemService()
+
+
+async def get_async_fs_service() -> FileSystemService:
+    """Dependency to get filesystem service instance without using the sync threadpool."""
+    return FileSystemService()

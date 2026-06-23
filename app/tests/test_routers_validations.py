@@ -130,10 +130,13 @@ class TestValidationsRouter:
         ):
             """Test deleting a validation."""
             mock_fs = MagicMock()
-            from app.fs import get_fs_service
+            from app.fs import get_async_fs_service
             from app.main import app
 
-            app.dependency_overrides[get_fs_service] = lambda: mock_fs
+            async def get_fs_service_override():
+                return mock_fs
+
+            app.dependency_overrides[get_async_fs_service] = get_fs_service_override
             try:
                 validation = Validation(name="test-validation")
                 session.add(validation)
@@ -148,7 +151,7 @@ class TestValidationsRouter:
                 )
                 mock_fs.move_report_to_trash.assert_called_once_with(validation.report)
             finally:
-                app.dependency_overrides.pop(get_fs_service, None)
+                app.dependency_overrides.pop(get_async_fs_service, None)
 
         def test_delete_validation_not_found(
             self, client: TestClient, auth_headers: dict[str, str]

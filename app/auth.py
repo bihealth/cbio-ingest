@@ -19,3 +19,9 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
     return token
+
+
+async def verify_token_dependency(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    return verify_token(credentials)

@@ -23,6 +23,11 @@ def get_session():
         yield session
 
 
+async def get_async_session():
+    with Session(engine) as session:
+        yield session
+
+
 def add_log(entity: Study | Panel | Validation, level: str, reporter: str, message: str) -> None:
     entity.logs.append(
         {
@@ -70,4 +75,9 @@ class DbHelper:
 
 def get_db_helper(session: Session = Depends(get_session)) -> DbHelper:
     """Dependency to get database helper instance."""
+    return DbHelper(session=session)
+
+
+async def get_async_db_helper(session: Session = Depends(get_async_session)) -> DbHelper:
+    """Dependency to get database helper instance without using the sync threadpool."""
     return DbHelper(session=session)

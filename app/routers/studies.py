@@ -1,12 +1,12 @@
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import attributes
 from sqlmodel import Session, col, select
 
-from app.auth import verify_token
-from app.db import DbHelper, get_db_helper, get_session
-from app.fs import FileSystemService, get_fs_service
+from app.auth import verify_token_dependency
+from app.db import DbHelper, get_async_db_helper, get_async_session
+from app.fs import FileSystemService, get_async_fs_service
 from app.models import (
     DeletionResponse,
     Panel,
@@ -18,16 +18,17 @@ from app.models import (
 )
 from app.scheduler import queue
 from app.tasks import ingest_study
-from app.validator import Validator, get_validator
+from app.validator import Validator, get_async_validator
 
 router = APIRouter(responses={401: {"description": "Unauthorized"}})
+SQLITE_MAX_INTEGER = 9223372036854775807
 
 
 @router.get("/")
 async def list_studies(
-    session: Session = Depends(get_session),
-    fs: FileSystemService = Depends(get_fs_service),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    fs: FileSystemService = Depends(get_async_fs_service),
+    token=Depends(verify_token_dependency),
 ) -> list[StudyResponse]:
     """List all ingested studies."""
     # scan file system for studies and reports
@@ -80,11 +81,11 @@ async def list_studies(
 async def create_study(
     data: TaskInput,
     force: bool = Query(default=False),
-    session: Session = Depends(get_session),
-    fs: FileSystemService = Depends(get_fs_service),
-    db: DbHelper = Depends(get_db_helper),
-    validator: Validator = Depends(get_validator),
-    token=Depends(verify_token),
+    session: Session = Depends(get_async_session),
+    fs: FileSystemService = Depends(get_async_fs_service),
+    db: DbHelper = Depends(get_async_db_helper),
+    validator: Validator = Depends(get_async_validator),
+    token=Depends(verify_token_dependency),
 ) -> StudyResponse:
     """Ingest a study into cBioPortal."""
 
@@ -154,10 +155,10 @@ async def create_study(
 
 @router.get("/{study_id}", responses={404: {"description": "Not Found"}})
 async def get_study(
-    study_id: int,
-    fs: FileSystemService = Depends(get_fs_service),
-    db: DbHelper = Depends(get_db_helper),
-    token=Depends(verify_token),
+    study_id: int = Path(ge=1, le=SQLITE_MAX_INTEGER),
+    fs: FileSystemService = Depends(get_async_fs_service),
+    db: DbHelper = Depends(get_async_db_helper),
+    token=Depends(verify_token_dependency),
 ) -> StudyResponse:
     """Fetch a single study by ID."""
     study, validation = db.get_study_validation_by_id(study_id)
@@ -174,10 +175,10 @@ async def get_study(
 
 @router.delete("/{study_id}", responses={404: {"description": "Not Found"}})
 async def delete_study(
-    study_id: int,
-    session: Session = Depends(get_session),
-    db: DbHelper = Depends(get_db_helper),
-    token=Depends(verify_token),
+    study_id: int = Path(ge=1, le=SQLITE_MAX_INTEGER),
+    session: Session = Depends(get_async_session),
+    db: DbHelper = Depends(get_async_db_helper),
+    token=Depends(verify_token_dependency),
 ) -> DeletionResponse:
     """Delete a study from cBioPortal."""
     try:
