@@ -32,7 +32,11 @@ async def list_validations(
     return [ValidationResponse.augment(v) for v in session.exec(select(Validation)).all()]
 
 
-@router.post("/", responses={400: {"description": "Bad Request"}, 409: {"description": "Conflict"}})
+@router.post(
+    "/",
+    status_code=201,
+    responses={400: {"description": "Bad Request"}, 409: {"description": "Conflict"}},
+)
 async def create_validation(
     data: TaskInput,
     force: bool = Query(default=False),

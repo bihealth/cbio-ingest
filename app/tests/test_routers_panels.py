@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Panel, Status, Study
+from app.models import Panel, Status, Study, Validation
 
 
 class TestPanelsRouter:
@@ -297,7 +297,7 @@ class TestPanelsRouter:
                 headers=auth_headers,
             )
             assert response.status_code == 409
-            assert response.json()["detail"] == "Another ingestion is already in progress"
+            assert response.json()["detail"] == "Another task is already in progress"
 
         @patch("app.routers.panels.queue")
         def test_create_panel_conflict_when_another_panel_in_progress(
@@ -319,7 +319,28 @@ class TestPanelsRouter:
                 headers=auth_headers,
             )
             assert response.status_code == 409
-            assert response.json()["detail"] == "Another ingestion is already in progress"
+            assert response.json()["detail"] == "Another task is already in progress"
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_conflict_when_validation_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that creating a panel returns 409 when a study ingestion is in progress."""
+            other_validation = Validation(name="other-validation", status=Status.IN_PROGRESS)
+            session.add(other_validation)
+            session.commit()
+
+            response = client.post(
+                "/panels/",
+                json={"name": "new-panel.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 409
+            assert response.json()["detail"] == "Another task is already in progress"
 
         @patch("app.routers.panels.queue")
         def test_create_panel_force_bypasses_conflict(

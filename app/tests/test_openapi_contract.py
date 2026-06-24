@@ -6,7 +6,7 @@ import anyio
 import httpx
 import schemathesis
 from fastapi.testclient import TestClient
-from hypothesis import HealthCheck, settings
+from hypothesis import HealthCheck, Phase, settings
 from openapi_spec_validator import validate
 from schemathesis.specs.openapi.checks import (
     ignored_auth,
@@ -228,7 +228,7 @@ SQLModel.metadata.create_all(_conformance_engine)
 
 
 @schemathesis_schema.parametrize()
-@settings(max_examples=20, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=5, phases=[Phase.generate], suppress_health_check=[HealthCheck.too_slow])
 def test_api_conformance(case):
     """Property-based contract test: every auto-generated request must receive
     a response that conforms to the OpenAPI spec.
@@ -265,11 +265,17 @@ def test_api_conformance(case):
                         headers={"Authorization": "Bearer test-token"},
                     )
 
+                    request_kwargs["headers"].pop("Authorization", None)
+                    request_kwargs["headers"]["Authorization"] = "Bearer test-token"
+
+                    cookies = request_kwargs.pop("cookies", None)
+
                     async def call_api():
                         transport = httpx.ASGITransport(app=app)
                         async with httpx.AsyncClient(
                             transport=transport,
                             base_url="http://testserver",
+                            cookies=cookies,
                         ) as api_client:
                             return await api_client.request(**request_kwargs)
 

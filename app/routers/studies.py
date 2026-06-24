@@ -136,7 +136,7 @@ async def create_study(
         )
         and not force
     ):
-        raise HTTPException(status_code=409, detail="Another ingestion is already in progress")
+        raise HTTPException(status_code=409, detail="Another task is already in progress")
 
     job_timeout = int(os.getenv("JOB_TIMEOUT", "43200"))  # 12 hours
     job = queue.enqueue(ingest_study, study.id, job_timeout=job_timeout)
