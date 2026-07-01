@@ -2,6 +2,7 @@ services:
   cbioportal:
     volumes:
       - ./panel:/panel:ro
+      - ./reports:/reports:rw
 
   api:
     container_name: cbio-ingest-api
@@ -15,6 +16,7 @@ services:
     volumes:
       - ./study:/app/study:ro
       - ./panel:/app/panel:ro
+      - ./reports:/reports:rw
       - ./db:/db
     networks:
       - cbio-ingest-net
@@ -22,7 +24,8 @@ services:
   worker:
     container_name: cbio-ingest-worker
     image: ghcr.io/bihealth/cbio-ingest:latest
-    command: ["rq", "worker", "--with-scheduler"]
+    command:
+      - worker
     env_file:
       - .env.cbio-ingest
     depends_on:
@@ -30,6 +33,7 @@ services:
     volumes:
       - ./study:/app/study:ro
       - ./panel:/app/panel:ro
+      - ./reports:/reports:rw
       - ./db:/db
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

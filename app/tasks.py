@@ -7,38 +7,57 @@ from sqlmodel import Session
 
 import docker
 from app.db import add_log, engine
-from app.models import LogLevel, Panel, Status, Study
+from app.models import LogLevel, Panel, Status, Study, Validation
 from app.validator import Validator
 
 
-def mark_in_progress(entity: Study | Panel, session: Session) -> None:
+def mark_in_progress(entity: Study | Panel | Validation, session: Session) -> None:
     entity.status = Status.IN_PROGRESS
-    add_log(entity, LogLevel.INFO, "worker", "Ingestion started.")
+    add_log(entity, LogLevel.INFO, "worker", "Task started.")
     session.add(entity)
     session.commit()
     session.refresh(entity)
 
 
-def mark_completed(entity: Study | Panel, session: Session) -> None:
+def mark_completed(entity: Study | Panel | Validation, session: Session) -> None:
     entity.status = Status.COMPLETED
-    entity.date_ingested = datetime.now(UTC)
-    add_log(entity, LogLevel.INFO, "worker", "Ingestion completed.")
+    entity.date = datetime.now(UTC)
+    add_log(entity, LogLevel.INFO, "worker", "Task completed.")
     session.add(entity)
     session.commit()
     session.refresh(entity)
 
 
-def mark_failed(entity: Study | Panel, error_message: str, session: Session) -> None:
+def mark_completed_with_warnings(entity: Study | Panel | Validation, session: Session) -> None:
+    entity.status = Status.COMPLETED
+    entity.date = datetime.now(UTC)
+    add_log(
+        entity,
+        LogLevel.WARNING,
+        "worker",
+        "Task completed with warnings. Please check logs for details.",
+    )
+    session.add(entity)
+    session.commit()
+    session.refresh(entity)
+
+
+def mark_failed(entity: Study | Panel | Validation, error_message: str, session: Session) -> None:
     entity.status = Status.FAILED
-    entity.date_ingested = datetime.now(UTC)
-    add_log(entity, LogLevel.ERROR, "worker", f"Ingestion failed: {error_message}")
+    entity.date = datetime.now(UTC)
+    add_log(entity, LogLevel.ERROR, "worker", f"Task failed: {error_message}")
     session.add(entity)
     session.commit()
     session.refresh(entity)
 
 
-def _run_ingest(
-    entity: Study | Panel, cmd: list[str], workdir: str | None, session: Session
+def _run(
+    entity: Study | Panel | Validation,
+    cmd: list[str],
+    workdir: str | None,
+    restart: bool,
+    warning_code: int,
+    session: Session,
 ) -> None:
     mark_in_progress(entity, session)
 
@@ -103,11 +122,16 @@ def _run_ingest(
         print(f"Finished ingestion with exit code {exit_code} (0 = success)")
 
         if exit_code == 0:
-            print("Restarting container to apply changes ...")
-            container.restart()
-            print("Finished restarting container")
-            add_log(entity, LogLevel.INFO, "worker", "Container restarted to apply changes.")
+            if restart:
+                print("Restarting container to apply changes ...")
+                container.restart()
+                print("Finished restarting container")
+                add_log(entity, LogLevel.INFO, "worker", "Container restarted to apply changes.")
             mark_completed(entity, session)
+
+        elif warning_code != -1 and exit_code == warning_code:
+            mark_completed_with_warnings(entity, session)
+
         else:
             mark_failed(
                 entity,
@@ -142,10 +166,12 @@ def ingest_study(study_id: int) -> None:
             "metaImport.py",
             "-s",
             f"/study/{validated_name}",
+            "-u",  # TODO can be dropped in cbioportal 7
+            "http://localhost:8080",  # TODO can be dropped in cbioportal 7
             "-o",
         ]
 
-        _run_ingest(study, cmd, None, session)
+        _run(study, cmd, None, True, -1, session)
 
 
 def ingest_panel(panel_id: int) -> None:
@@ -167,4 +193,47 @@ def ingest_panel(panel_id: int) -> None:
             f"/panel/{validated_name}",
         ]
 
-        _run_ingest(panel, cmd, "/core/scripts", session)
+        _run(panel, cmd, "/core/scripts", True, -1, session)
+
+
+def validate_study(validation_id: int) -> None:
+    with Session(engine) as session:
+        validation = session.get(Validation, validation_id)
+
+        if not validation:
+            raise ValueError(f"Validation with ID {validation_id} not found")
+
+        try:
+            validated_study_name = Validator().validate_folder_name(validation.name)
+        except ValueError as e:
+            mark_failed(validation, str(e), session)
+            raise
+
+        try:
+            validated_report_file = Validator().validate_file_name(validation.report)
+        except ValueError as e:
+            mark_failed(validation, f"Invalid report name: {e}", session)
+            raise
+
+        # From the validateData.py script
+        #   https://github.com/cBioPortal/datahub-study-curation-tools
+        #   -> validation / validator / validateData.py
+        #
+        # if self.max_level <= logging.INFO:
+        #     return 0
+        # elif self.max_level == logging.WARNING:
+        #     return 3
+        # elif self.max_level == logging.ERROR:
+        #     return 1
+        # else:
+        #     return 2
+
+        cmd = [
+            "validateData.py",
+            "-s",
+            f"/study/{validated_study_name}",
+            "-html",
+            f"/report/{validated_report_file}",
+        ]
+
+        _run(validation, cmd, None, False, 3, session)

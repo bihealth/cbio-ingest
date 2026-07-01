@@ -4,13 +4,40 @@ import os
 from typing import Generator
 from unittest.mock import patch
 
+import anyio
+import httpx
 import pytest
-from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
-from app.db import get_session
+from app.db import get_async_session
 from app.main import app
+
+
+class ASGITestClient:
+    """Synchronous test client backed by httpx's ASGI transport."""
+
+    def __init__(self, app):
+        self.app = app
+
+    def request(self, method: str, url: str, **kwargs) -> httpx.Response:
+        async def call() -> httpx.Response:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=self.app),
+                base_url="http://testserver",
+            ) as client:
+                return await client.request(method, url, **kwargs)
+
+        return anyio.run(call)
+
+    def get(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("POST", url, **kwargs)
+
+    def delete(self, url: str, **kwargs) -> httpx.Response:
+        return self.request("DELETE", url, **kwargs)
 
 
 @pytest.fixture(name="session")
@@ -27,14 +54,14 @@ def session_fixture() -> Generator[Session, None, None]:
 
 
 @pytest.fixture(name="client")
-def client_fixture(session: Session) -> Generator[TestClient, None, None]:
+def client_fixture(session: Session) -> Generator[ASGITestClient, None, None]:
     """Create a test client with database session override."""
 
-    def get_session_override():
+    async def get_session_override():
         return session
 
-    app.dependency_overrides[get_session] = get_session_override
-    client = TestClient(app)
+    app.dependency_overrides[get_async_session] = get_session_override
+    client = ASGITestClient(app)
     yield client
     app.dependency_overrides.clear()
 

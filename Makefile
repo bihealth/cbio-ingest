@@ -46,23 +46,23 @@ worker:
 docker:
 	bash docker/build.sh
 
-.PHONY: db-migrate
-db-migrate:
+.PHONY: migrate
+migrate:
 	uv run alembic upgrade head
 
-.PHONY: db-migration
-db-migration:
+.PHONY: migration
+migration:
 	uv run alembic revision --autogenerate -m "$(msg)"
-# usage: make db-migration msg="add foo column"
+# usage: make migration msg="add foo column"
 
-.PHONY: db-rollback
-db-rollback:
+.PHONY: rollback
+rollback:
 	uv run alembic downgrade -1
 
-.PHONY: db-history
-db-history:
+.PHONY: history
+history:
 	uv run alembic history --verbose
 
-.PHONY: db-current
-db-current:
+.PHONY: current
+current:
 	uv run alembic current

@@ -62,3 +62,13 @@ class Validator:
             )
 
         return ValidFileName(name)
+
+
+def get_validator() -> Validator:
+    """Dependency to get validator service instance."""
+    return Validator()
+
+
+async def get_async_validator() -> Validator:
+    """Dependency to get validator service instance without using the sync threadpool."""
+    return Validator()

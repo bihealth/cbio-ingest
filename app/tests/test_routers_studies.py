@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Panel, Status, Study
+from app.models import Panel, Status, Study, Validation
 
 
 class TestStudiesRouter:
@@ -245,69 +245,8 @@ class TestStudiesRouter:
             data = response.json()
             assert data["name"] == "failed-study"
             assert data["job_id"] == "job-456"
+            assert data["logs"] == []
             assert mock_queue.enqueue.called
-
-        @patch("app.routers.studies.queue")
-        def test_create_study_retry_failed_purges_logs_by_default(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that retrying a failed study purges logs by default."""
-            study = Study(
-                name="failed-study-logs",
-                status=Status.FAILED,
-                logs=[{"level": "ERROR", "message": "previous error"}],
-            )
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-789"
-            mock_queue.enqueue.return_value = mock_job
-            TestStudiesRouter._create_study_source("failed-study-logs")
-
-            response = client.post(
-                "/studies/",
-                json={"name": "failed-study-logs"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert response.json()["logs"] == []
-
-        @patch("app.routers.studies.queue")
-        def test_create_study_retry_failed_keep_logs(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that retrying a failed study preserves logs when keep_logs=true."""
-            study = Study(
-                name="failed-study-keeplogs",
-                status=Status.FAILED,
-                logs=[{"level": "ERROR", "message": "previous error"}],
-            )
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-789"
-            mock_queue.enqueue.return_value = mock_job
-            TestStudiesRouter._create_study_source("failed-study-keeplogs")
-
-            response = client.post(
-                "/studies/?keep_logs=true",
-                json={"name": "failed-study-keeplogs"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert len(response.json()["logs"]) == 1
 
         @patch("app.routers.studies.queue")
         def test_create_study_force_completed(
@@ -336,69 +275,8 @@ class TestStudiesRouter:
             data = response.json()
             assert data["name"] == "completed-study-force"
             assert data["job_id"] == "job-force"
+            assert data["logs"] == []
             assert mock_queue.enqueue.called
-
-        @patch("app.routers.studies.queue")
-        def test_create_study_force_completed_purges_logs_by_default(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that force re-ingesting a completed study purges logs by default."""
-            study = Study(
-                name="completed-study-force-logs",
-                status=Status.COMPLETED,
-                logs=[{"level": "INFO", "message": "previous success"}],
-            )
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-force-logs"
-            mock_queue.enqueue.return_value = mock_job
-            TestStudiesRouter._create_study_source("completed-study-force-logs")
-
-            response = client.post(
-                "/studies/?force=true",
-                json={"name": "completed-study-force-logs"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert response.json()["logs"] == []
-
-        @patch("app.routers.studies.queue")
-        def test_create_study_force_completed_keep_logs(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that force re-ingesting a completed study preserves logs when keep_logs=true."""
-            study = Study(
-                name="completed-study-force-keeplogs",
-                status=Status.COMPLETED,
-                logs=[{"level": "INFO", "message": "previous success"}],
-            )
-            session.add(study)
-            session.commit()
-            session.refresh(study)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-force-keeplogs"
-            mock_queue.enqueue.return_value = mock_job
-            TestStudiesRouter._create_study_source("completed-study-force-keeplogs")
-
-            response = client.post(
-                "/studies/?force=true&keep_logs=true",
-                json={"name": "completed-study-force-keeplogs"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert len(response.json()["logs"]) == 1
 
         @patch("app.routers.studies.queue")
         def test_create_study_conflict_when_another_study_in_progress(
@@ -420,7 +298,7 @@ class TestStudiesRouter:
                 headers=auth_headers,
             )
             assert response.status_code == 409
-            assert response.json()["detail"] == "Another ingestion is already in progress"
+            assert response.json()["detail"] == "Another task is already in progress"
 
         @patch("app.routers.studies.queue")
         def test_create_study_conflict_when_panel_in_progress(
@@ -441,7 +319,28 @@ class TestStudiesRouter:
                 headers=auth_headers,
             )
             assert response.status_code == 409
-            assert response.json()["detail"] == "Another ingestion is already in progress"
+            assert response.json()["detail"] == "Another task is already in progress"
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_conflict_when_validation_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that creating a study returns 409 when a study validation is in progress."""
+            validation = Validation(name="other-validation", status=Status.IN_PROGRESS)
+            session.add(validation)
+            session.commit()
+
+            response = client.post(
+                "/studies/",
+                json={"name": "new-study"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 409
+            assert response.json()["detail"] == "Another task is already in progress"
 
         @patch("app.routers.studies.queue")
         def test_create_study_force_bypasses_conflict(
@@ -475,6 +374,66 @@ class TestStudiesRouter:
             """Test creating a study without authentication."""
             response = client.post("/studies/", json={"name": "study"})
             assert response.status_code == 401
+
+        def test_create_study_invalid_name(self, client: TestClient, auth_headers: dict[str, str]):
+            """Test creating a study with an invalid folder name triggers 400."""
+            response = client.post(
+                "/studies/",
+                json={"name": "../bad-folder"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert "Study name invalid" in response.json()["detail"]
+
+        def test_create_study_not_on_disk(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test creating a study when the study record exists but folder is missing on disk."""
+            study = Study(name="missing-study", status=Status.INITIAL)
+            session.add(study)
+            session.commit()
+
+            response = client.post(
+                "/studies/",
+                json={"name": "missing-study"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert response.json()["detail"] == "Study not found on disk"
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_attaches_validation(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """If a validation exists with the same name, creating the study should attach it."""
+            # create a validation record without a study_id
+            validation = Validation(name="attach-me", status=Status.COMPLETED)
+            session.add(validation)
+            session.commit()
+
+            # ensure queue mocked
+            mock_job = MagicMock()
+            mock_job.id = "job-attach"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/",
+                json={"name": "attach-me"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            # response should include validation_id
+            assert data.get("validation_id") == validation.id
+
+            # refresh DB state and verify the validation.study_id points to the new study
+            updated_validation = session.get(Validation, validation.id)
+            assert updated_validation is not None
+            assert updated_validation.study_id == data["id"]
 
     class TestGetStudy:
         """Tests for GET /studies/{study_id} endpoint."""
@@ -521,11 +480,35 @@ class TestStudiesRouter:
 
             response = client.delete(f"/studies/{study.id}", headers=auth_headers)
             assert response.status_code == 200
-            assert response.json()["message"] == "Study deleted successfully"
+            assert response.json()["message"] == f"Study with ID {study.id} deleted successfully"
 
             # Verify study is deleted
             deleted_study = session.get(Study, study.id)
             assert deleted_study is None
+
+        def test_delete_study_disconnects_validation(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Deleting a study should unset any linked validation.study_id."""
+            # create a study and linked validation
+            study = Study(name="study-with-validation")
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            validation = Validation(name=study.name, study_id=study.id)
+            session.add(validation)
+            session.commit()
+            session.refresh(validation)
+
+            # delete the study
+            response = client.delete(f"/studies/{study.id}", headers=auth_headers)
+            assert response.status_code == 200
+
+            # refresh validation and ensure study_id is None
+            updated_validation = session.get(Validation, validation.id)
+            assert updated_validation is not None
+            assert updated_validation.study_id is None
 
         def test_delete_study_not_found(self, client: TestClient, auth_headers: dict[str, str]):
             """Test deleting a non-existent study."""

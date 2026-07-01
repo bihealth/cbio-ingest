@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.models import Panel, Status, Study
+from app.models import Panel, Status, Study, Validation
 
 
 class TestPanelsRouter:
@@ -245,69 +245,8 @@ class TestPanelsRouter:
             data = response.json()
             assert data["name"] == "failed-panel.txt"
             assert data["job_id"] == "job-456"
+            assert data["logs"] == []
             assert mock_queue.enqueue.called
-
-        @patch("app.routers.panels.queue")
-        def test_create_panel_retry_failed_purges_logs_by_default(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that retrying a failed panel purges logs by default."""
-            panel = Panel(
-                name="failed-panel-logs.txt",
-                status=Status.FAILED,
-                logs=[{"level": "ERROR", "message": "previous error"}],
-            )
-            session.add(panel)
-            session.commit()
-            session.refresh(panel)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-789"
-            mock_queue.enqueue.return_value = mock_job
-            TestPanelsRouter._create_panel_source("failed-panel-logs.txt")
-
-            response = client.post(
-                "/panels/",
-                json={"name": "failed-panel-logs.txt"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert response.json()["logs"] == []
-
-        @patch("app.routers.panels.queue")
-        def test_create_panel_retry_failed_keep_logs(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that retrying a failed panel preserves logs when keep_logs=true."""
-            panel = Panel(
-                name="failed-panel-keeplogs.txt",
-                status=Status.FAILED,
-                logs=[{"level": "ERROR", "message": "previous error"}],
-            )
-            session.add(panel)
-            session.commit()
-            session.refresh(panel)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-789"
-            mock_queue.enqueue.return_value = mock_job
-            TestPanelsRouter._create_panel_source("failed-panel-keeplogs.txt")
-
-            response = client.post(
-                "/panels/?keep_logs=true",
-                json={"name": "failed-panel-keeplogs.txt"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert len(response.json()["logs"]) == 1
 
         @patch("app.routers.panels.queue")
         def test_create_panel_force_completed(
@@ -336,69 +275,8 @@ class TestPanelsRouter:
             data = response.json()
             assert data["name"] == "completed-panel-force.txt"
             assert data["job_id"] == "job-force"
+            assert data["logs"] == []
             assert mock_queue.enqueue.called
-
-        @patch("app.routers.panels.queue")
-        def test_create_panel_force_completed_purges_logs_by_default(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that force re-ingesting a completed panel purges logs by default."""
-            panel = Panel(
-                name="completed-panel-force-logs.txt",
-                status=Status.COMPLETED,
-                logs=[{"level": "INFO", "message": "previous success"}],
-            )
-            session.add(panel)
-            session.commit()
-            session.refresh(panel)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-force-logs"
-            mock_queue.enqueue.return_value = mock_job
-            TestPanelsRouter._create_panel_source("completed-panel-force-logs.txt")
-
-            response = client.post(
-                "/panels/?force=true",
-                json={"name": "completed-panel-force-logs.txt"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert response.json()["logs"] == []
-
-        @patch("app.routers.panels.queue")
-        def test_create_panel_force_completed_keep_logs(
-            self,
-            mock_queue: MagicMock,
-            client: TestClient,
-            auth_headers: dict[str, str],
-            session: Session,
-        ):
-            """Test that force re-ingesting a completed panel preserves logs when keep_logs=true."""
-            panel = Panel(
-                name="completed-panel-force-keeplogs.txt",
-                status=Status.COMPLETED,
-                logs=[{"level": "INFO", "message": "previous success"}],
-            )
-            session.add(panel)
-            session.commit()
-            session.refresh(panel)
-
-            mock_job = MagicMock()
-            mock_job.id = "job-force-keeplogs"
-            mock_queue.enqueue.return_value = mock_job
-            TestPanelsRouter._create_panel_source("completed-panel-force-keeplogs.txt")
-
-            response = client.post(
-                "/panels/?force=true&keep_logs=true",
-                json={"name": "completed-panel-force-keeplogs.txt"},
-                headers=auth_headers,
-            )
-            assert response.status_code == 201
-            assert len(response.json()["logs"]) == 1
 
         @patch("app.routers.panels.queue")
         def test_create_panel_conflict_when_study_in_progress(
@@ -419,7 +297,7 @@ class TestPanelsRouter:
                 headers=auth_headers,
             )
             assert response.status_code == 409
-            assert response.json()["detail"] == "Another ingestion is already in progress"
+            assert response.json()["detail"] == "Another task is already in progress"
 
         @patch("app.routers.panels.queue")
         def test_create_panel_conflict_when_another_panel_in_progress(
@@ -441,7 +319,28 @@ class TestPanelsRouter:
                 headers=auth_headers,
             )
             assert response.status_code == 409
-            assert response.json()["detail"] == "Another ingestion is already in progress"
+            assert response.json()["detail"] == "Another task is already in progress"
+
+        @patch("app.routers.panels.queue")
+        def test_create_panel_conflict_when_validation_in_progress(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """Test that creating a panel returns 409 when a study ingestion is in progress."""
+            other_validation = Validation(name="other-validation", status=Status.IN_PROGRESS)
+            session.add(other_validation)
+            session.commit()
+
+            response = client.post(
+                "/panels/",
+                json={"name": "new-panel.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 409
+            assert response.json()["detail"] == "Another task is already in progress"
 
         @patch("app.routers.panels.queue")
         def test_create_panel_force_bypasses_conflict(
@@ -476,6 +375,32 @@ class TestPanelsRouter:
             response = client.post("/panels/", json={"name": "panel.txt"})
             assert response.status_code == 401
 
+        def test_create_panel_invalid_name(self, client: TestClient, auth_headers: dict[str, str]):
+            """Test creating a panel with an invalid file name triggers 400."""
+            response = client.post(
+                "/panels/",
+                json={"name": "../bad-file"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert "Panel name invalid" in response.json()["detail"]
+
+        def test_create_panel_not_on_disk(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test creating a panel when the panel record exists but file is missing on disk."""
+            panel = Panel(name="missing-on-disk.txt", status=Status.INITIAL)
+            session.add(panel)
+            session.commit()
+
+            response = client.post(
+                "/panels/",
+                json={"name": "missing-on-disk.txt"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert response.json()["detail"] == "Panel not found on disk"
+
     class TestGetPanel:
         """Tests for GET /panels/{panel_id} endpoint."""
 
@@ -501,6 +426,13 @@ class TestPanelsRouter:
             assert response.status_code == 404
             assert response.json()["detail"] == "Panel not found"
 
+        def test_get_panel_overflow(self, client: TestClient, auth_headers: dict[str, str]):
+            """Simulate an OverflowError from the DB session.get path."""
+            with patch("sqlmodel.Session.get", side_effect=OverflowError):
+                response = client.get("/panels/1", headers=auth_headers)
+                assert response.status_code == 404
+                assert response.json()["detail"] == "Panel not found"
+
         def test_get_panel_unauthorized(self, client: TestClient):
             """Test fetching a panel without authentication."""
             response = client.get("/panels/1")
@@ -521,7 +453,7 @@ class TestPanelsRouter:
 
             response = client.delete(f"/panels/{panel.id}", headers=auth_headers)
             assert response.status_code == 200
-            assert response.json()["message"] == "Panel deleted successfully"
+            assert response.json()["message"] == f"Panel with ID {panel.id} deleted successfully"
 
             # Verify panel is deleted
             deleted_panel = session.get(Panel, panel.id)
@@ -537,3 +469,10 @@ class TestPanelsRouter:
             """Test deleting a panel without authentication."""
             response = client.delete("/panels/1")
             assert response.status_code == 401
+
+        def test_delete_panel_overflow(self, client: TestClient, auth_headers: dict[str, str]):
+            """Simulate an OverflowError from the DB session.get path on delete."""
+            with patch("sqlmodel.Session.get", side_effect=OverflowError):
+                response = client.delete("/panels/1", headers=auth_headers)
+                assert response.status_code == 404
+                assert response.json()["detail"] == "Panel not found"
