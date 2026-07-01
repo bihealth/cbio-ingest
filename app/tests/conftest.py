@@ -22,9 +22,8 @@ class ASGITestClient:
 
     def request(self, method: str, url: str, **kwargs) -> httpx.Response:
         async def call() -> httpx.Response:
-            transport = httpx.ASGITransport(app=self.app)
             async with httpx.AsyncClient(
-                transport=transport,
+                transport=httpx.ASGITransport(app=self.app),
                 base_url="http://testserver",
             ) as client:
                 return await client.request(method, url, **kwargs)

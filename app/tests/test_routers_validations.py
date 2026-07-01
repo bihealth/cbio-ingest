@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models import Panel, Status, Study, Validation
 
@@ -321,6 +321,71 @@ class TestValidationsRouter:
             response = client.post("/validations/", json={"name": "validation"})
             assert response.status_code == 401
 
+        def test_create_validation_invalid_name(
+            self, client: TestClient, auth_headers: dict[str, str]
+        ):
+            """Test creating a validation with invalid folder name triggers 400."""
+            response = client.post(
+                "/validations/",
+                json={"name": "../bad-folder"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert "Study name invalid" in response.json()["detail"]
+
+        def test_create_validation_not_on_disk(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test creating a validation when the validation record exists but folder is missing on disk."""
+            validation = Validation(name="missing-validation", status=Status.INITIAL)
+            session.add(validation)
+            session.commit()
+
+            response = client.post(
+                "/validations/",
+                json={"name": "missing-validation"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert response.json()["detail"] == "Study not found on disk"
+
+        @patch("app.routers.validations.queue")
+        def test_create_validation_attaches_study(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """If a study exists with the same name, creating the validation should attach it."""
+            # create a study record
+            study = Study(name="attach-study", status=Status.COMPLETED)
+            session.add(study)
+            session.commit()
+
+            # ensure queue mocked
+            mock_job = MagicMock()
+            mock_job.id = "job-attach-val"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/validations/",
+                json={"name": "attach-study"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            # response should include study_id
+            assert data.get("study_id") == study.id
+
+            # refresh DB state and verify the validation.study_id points to the study
+            # find the validation by name
+            validation = session.exec(
+                select(Validation).where(Validation.name == "attach-study")
+            ).first()
+            assert validation is not None
+            assert validation.study_id == study.id
+
     class TestGetValidation:
         """Tests for GET /validations/{validation_id} endpoint."""
 
@@ -376,6 +441,38 @@ class TestValidationsRouter:
             app.dependency_overrides[get_async_fs_service] = get_fs_service_override
             try:
                 validation = Validation(name="test-validation")
+                session.add(validation)
+                session.commit()
+                session.refresh(validation)
+
+                response = client.delete(f"/validations/{validation.id}", headers=auth_headers)
+                assert response.status_code == 200
+                assert (
+                    response.json()["message"]
+                    == f"Validation with ID {validation.id} deleted successfully"
+                )
+                mock_fs.move_report_to_trash.assert_called_once_with(validation.report)
+            finally:
+                app.dependency_overrides.pop(get_async_fs_service, None)
+
+        def test_delete_validation_report_missing(
+            self,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """If the report file is already gone, the delete should still succeed."""
+            mock_fs = MagicMock()
+            mock_fs.move_report_to_trash.side_effect = FileNotFoundError
+            from app.fs import get_async_fs_service
+            from app.main import app
+
+            async def get_fs_service_override():
+                return mock_fs
+
+            app.dependency_overrides[get_async_fs_service] = get_fs_service_override
+            try:
+                validation = Validation(name="test-validation-missing-report")
                 session.add(validation)
                 session.commit()
                 session.refresh(validation)

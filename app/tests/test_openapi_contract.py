@@ -268,6 +268,35 @@ def test_api_conformance(case):
                     request_kwargs["headers"].pop("Authorization", None)
                     request_kwargs["headers"]["Authorization"] = "Bearer test-token"
 
+                    # httpx deprecation: prefer `content=` for raw bytes/text bodies.
+                    # Schemathesis may return `data` as raw bytes/str; normalize it to
+                    # `content` to avoid DeprecationWarning from httpx internals.
+                    if "data" in request_kwargs and isinstance(
+                        request_kwargs["data"], (bytes, str)
+                    ):
+                        request_kwargs["content"] = request_kwargs.pop("data")
+                    # Normalize all headers: encode any non-ASCII str keys/values to UTF-8
+                    headers = request_kwargs.get("headers")
+                    if headers:
+                        normalized = {}
+                        # support both dict and list-of-tuples
+                        items = headers.items() if hasattr(headers, "items") else headers
+                        for hk, hv in items:
+                            new_k = hk
+                            new_v = hv
+                            if isinstance(hk, str):
+                                try:
+                                    hk.encode("ascii")
+                                except UnicodeEncodeError:
+                                    new_k = hk.encode("utf-8")
+                            if isinstance(hv, str):
+                                try:
+                                    hv.encode("ascii")
+                                except UnicodeEncodeError:
+                                    new_v = hv.encode("utf-8")
+                            normalized[new_k] = new_v
+                        request_kwargs["headers"] = normalized
+
                     cookies = request_kwargs.pop("cookies", None)
 
                     async def call_api():

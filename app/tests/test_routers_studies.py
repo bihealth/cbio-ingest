@@ -375,6 +375,65 @@ class TestStudiesRouter:
             response = client.post("/studies/", json={"name": "study"})
             assert response.status_code == 401
 
+        def test_create_study_invalid_name(self, client: TestClient, auth_headers: dict[str, str]):
+            """Test creating a study with an invalid folder name triggers 400."""
+            response = client.post(
+                "/studies/",
+                json={"name": "../bad-folder"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert "Study name invalid" in response.json()["detail"]
+
+        def test_create_study_not_on_disk(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Test creating a study when the study record exists but folder is missing on disk."""
+            study = Study(name="missing-study", status=Status.INITIAL)
+            session.add(study)
+            session.commit()
+
+            response = client.post(
+                "/studies/",
+                json={"name": "missing-study"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 400
+            assert response.json()["detail"] == "Study not found on disk"
+
+        @patch("app.routers.studies.queue")
+        def test_create_study_attaches_validation(
+            self,
+            mock_queue: MagicMock,
+            client: TestClient,
+            auth_headers: dict[str, str],
+            session: Session,
+        ):
+            """If a validation exists with the same name, creating the study should attach it."""
+            # create a validation record without a study_id
+            validation = Validation(name="attach-me", status=Status.COMPLETED)
+            session.add(validation)
+            session.commit()
+
+            # ensure queue mocked
+            mock_job = MagicMock()
+            mock_job.id = "job-attach"
+            mock_queue.enqueue.return_value = mock_job
+
+            response = client.post(
+                "/studies/",
+                json={"name": "attach-me"},
+                headers=auth_headers,
+            )
+            assert response.status_code == 201
+            data = response.json()
+            # response should include validation_id
+            assert data.get("validation_id") == validation.id
+
+            # refresh DB state and verify the validation.study_id points to the new study
+            updated_validation = session.get(Validation, validation.id)
+            assert updated_validation.study_id == data["id"]
+
     class TestGetStudy:
         """Tests for GET /studies/{study_id} endpoint."""
 
@@ -425,6 +484,30 @@ class TestStudiesRouter:
             # Verify study is deleted
             deleted_study = session.get(Study, study.id)
             assert deleted_study is None
+
+        def test_delete_study_disconnects_validation(
+            self, client: TestClient, auth_headers: dict[str, str], session: Session
+        ):
+            """Deleting a study should unset any linked validation.study_id."""
+            # create a study and linked validation
+            study = Study(name="study-with-validation")
+            session.add(study)
+            session.commit()
+            session.refresh(study)
+
+            validation = Validation(name=study.name, study_id=study.id)
+            session.add(validation)
+            session.commit()
+            session.refresh(validation)
+
+            # delete the study
+            response = client.delete(f"/studies/{study.id}", headers=auth_headers)
+            assert response.status_code == 200
+
+            # refresh validation and ensure study_id is None
+            updated_validation = session.get(Validation, validation.id)
+            assert updated_validation is not None
+            assert updated_validation.study_id is None
 
         def test_delete_study_not_found(self, client: TestClient, auth_headers: dict[str, str]):
             """Test deleting a non-existent study."""
