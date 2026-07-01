@@ -432,6 +432,7 @@ class TestStudiesRouter:
 
             # refresh DB state and verify the validation.study_id points to the new study
             updated_validation = session.get(Validation, validation.id)
+            assert updated_validation is not None
             assert updated_validation.study_id == data["id"]
 
     class TestGetStudy:

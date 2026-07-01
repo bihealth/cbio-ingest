@@ -336,7 +336,8 @@ class TestValidationsRouter:
         def test_create_validation_not_on_disk(
             self, client: TestClient, auth_headers: dict[str, str], session: Session
         ):
-            """Test creating a validation when the validation record exists but folder is missing on disk."""
+            """Test creating a validation when the validation record exists but folder is missing
+            on disk."""
             validation = Validation(name="missing-validation", status=Status.INITIAL)
             session.add(validation)
             session.commit()
