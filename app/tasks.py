@@ -11,6 +11,10 @@ from app.models import LogLevel, Panel, Status, Study, Validation
 from app.validator import Validator
 
 
+class ContainerExecutionError(RuntimeError):
+    pass
+
+
 def mark_in_progress(entity: Study | Panel | Validation, session: Session) -> None:
     entity.status = Status.IN_PROGRESS
     add_log(entity, LogLevel.INFO, "worker", "Task started.")
@@ -133,15 +137,19 @@ def _run(
             mark_completed_with_warnings(entity, session)
 
         else:
+            error_message = f"Container execution failed with exit code {exit_code}"
             mark_failed(
                 entity,
-                f"Container execution failed with exit code {exit_code}",
+                error_message,
                 session,
             )
+            raise ContainerExecutionError(error_message)
 
     except JobTimeoutException:
         session.rollback()
         mark_failed(entity, "Job exceeded maximum timeout", session)
+        raise
+    except ContainerExecutionError:
         raise
     except Exception as e:
         session.rollback()

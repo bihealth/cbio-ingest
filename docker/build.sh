@@ -5,6 +5,7 @@ set -e
 echo "Building Docker image ..."
 
 IMAGE=cbio-ingest:dev
+REGISTRY_IMAGE=localhost:5000/$IMAGE
 
 docker build \
   --build-arg HTTP_PROXY=$http_proxy \
@@ -15,7 +16,8 @@ docker build \
   .
 
 if docker ps | grep registry | grep "5000->5000"; then
-  docker push localhost:5000/$IMAGE
+  docker tag $IMAGE $REGISTRY_IMAGE
+  docker push $REGISTRY_IMAGE
 else
   echo Local registry not running, not pushing.
 fi

@@ -8,6 +8,7 @@ from sqlmodel import Session
 
 from app.models import LogLevel, Panel, Status, Study, Validation
 from app.tasks import (
+    ContainerExecutionError,
     ingest_panel,
     ingest_study,
     mark_completed,
@@ -214,7 +215,8 @@ class TestIngestStudy:
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
 
-        ingest_study(1)
+        with pytest.raises(ContainerExecutionError, match="exit code 1"):
+            ingest_study(1)
 
         # Verify study was marked as failed
         assert study.status == Status.FAILED
@@ -341,7 +343,8 @@ class TestIngestPanel:
 
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
 
-        ingest_panel(1)
+        with pytest.raises(ContainerExecutionError, match="exit code 1"):
+            ingest_panel(1)
 
         assert panel.status == Status.FAILED
         assert "exit code 1" in panel.logs[-1]["message"]
@@ -512,7 +515,8 @@ class TestValidateStudy:
         mock_client.api.exec_inspect.return_value = {"ExitCode": 1}
         mock_container.attrs = {"Config": {"Image": "cbioportal:5.0.0"}}
 
-        validate_study(1)
+        with pytest.raises(ContainerExecutionError, match="exit code 1"):
+            validate_study(1)
 
         assert validation.status == Status.FAILED
         assert "exit code 1" in validation.logs[-1]["message"]
